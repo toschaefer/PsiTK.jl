@@ -276,9 +276,9 @@ version = "0.3.3"
 
 [[deps.DFTK]]
 deps = ["AbstractFFTs", "Artifacts", "AtomsBase", "AtomsCalculators", "Brillouin", "Dates", "DftFunctionals", "DifferentiationInterface", "DocStringExtensions", "FFTW", "ForwardDiff", "GPUArraysCore", "Interpolations", "IterTools", "KrylovKit", "Libxc", "LineSearches", "LinearAlgebra", "LinearMaps", "MPI", "Markdown", "Optim", "PeriodicTable", "PkgVersion", "Polynomials", "PrecompileTools", "Preferences", "Printf", "PseudoPotentialData", "PseudoPotentialIO", "Random", "Roots", "SparseArrays", "SpecialFunctions", "Spglib", "StaticArrays", "Statistics", "TimerOutputs", "Unitful", "UnitfulAtomic"]
-path = "../DFTK_exx"
+git-tree-sha1 = "0fcd5a9d7c395c474604ce4f2129a8f281577586"
 uuid = "acf6eb54-70d9-11e9-0013-234b7a5f5337"
-version = "0.7.19"
+version = "0.7.20"
 
     [deps.DFTK.extensions]
     DFTKAMDGPUExt = "AMDGPU"
@@ -911,6 +911,7 @@ uuid = "cb339c56-07fa-4cb2-923a-142469552264"
 version = "0.1.1"
 
 [[deps.PsiTK]]
+deps = ["DFTK"]
 path = "."
 uuid = "d89be4ce-3048-45c0-87f5-cd5ed04aaed3"
 version = "1.0.0-DEV"
