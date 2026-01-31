@@ -1,7 +1,10 @@
 name = "PsiTK"
 uuid = "d89be4ce-3048-45c0-87f5-cd5ed04aaed3"
-authors = ["Tobias Schäfer"]
 version = "1.0.0-DEV"
+authors = ["Tobias Schäfer"]
+
+[deps]
+DFTK = "acf6eb54-70d9-11e9-0013-234b7a5f5337"
 
 [compat]
 julia = "1.12"
