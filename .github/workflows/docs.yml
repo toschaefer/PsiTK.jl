@@ -5,19 +5,21 @@ on:
     branches:
       - main 
     tags: '*'
+  pull_request:
 
 jobs:
   build:
+    permissions:
+      contents: write 
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: julia-actions/setup-julia@v1
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
         with:
-          version: '1.12' 
+          version: '1' 
       - name: Install dependencies
         run: julia --project=docs/ -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
       - name: Build and Deploy
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Automatically provided by GitHub
-          DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }} # Only needed for advanced setups, usually GITHUB_TOKEN is enough
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: julia --project=docs/ docs/make.jl
