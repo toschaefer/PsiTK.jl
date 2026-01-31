@@ -1,0 +1,10 @@
+# This file is machine-generated - editing it directly is not advised
+
+julia_version = "1.12.1"
+manifest_format = "2.0"
+project_hash = "cb297854dbb9c7f54b5666e2f45f91d010cd6cc0"
+
+[[deps.PsiTK]]
+path = "."
+uuid = "d89be4ce-3048-45c0-87f5-cd5ed04aaed3"
+version = "1.0.0-DEV"
