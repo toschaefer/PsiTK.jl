@@ -13,7 +13,7 @@ Features:
 
 * virtual orbital space compression (e.g. natural orbitals)
 * MP2 ground-state energy
-* interface to the high-performance coupled cluster solver [Cc4s](https://gitlab.cc4s.org/cc4s/cc4s).
+* interface to the high-performance coupled cluster (CC) solver [Cc4s](https://gitlab.cc4s.org/cc4s/cc4s), enabling CC calculations via the workflow DFTK &rarr; PsiTK &rarr; Cc4s.
 
 ## Motivation
 
