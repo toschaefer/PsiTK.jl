@@ -6,7 +6,7 @@ using DFTK
 
 include("coulomb_vertex.jl")
 
-export dump_cc4s_input
+export dump_cc4s_files
 include("interfaces/cc4s.jl")
 
 end

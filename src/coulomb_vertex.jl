@@ -7,9 +7,11 @@ Compute the Coulomb vertex
 ```
 where `n_bands` is the number of bands to be considered.
 """
-function compute_coulomb_vertex(basis,
-                                        ψ::AbstractVector{<:AbstractArray{T}};
-                                        n_bands=size(ψ[1], 2)) where {T}
+function compute_coulomb_vertex(
+    basis,
+    ψ::AbstractVector{<:AbstractArray{T}};
+    n_bands=size(ψ[1], 2)
+) where {T}
     mpi_nprocs(basis.comm_kpts) > 1 && error("Cannot use mpi")
     if length(basis.kpoints) > 1 && basis.use_symmetries_for_kpoint_reduction
         error("Cannot use symmetries right now.")
@@ -17,7 +19,13 @@ function compute_coulomb_vertex(basis,
     end
 
     # show progress via ProgressMeter
-    progress = Progress(n_bands*size(basis.kpoints,1); desc="Compute Coulomb vertices", dt=0.5, barlen=20, color=:black)
+    progress = Progress(
+         n_bands*size(basis.kpoints,1); 
+         desc="Compute Coulomb vertices", 
+         dt=0.5, 
+         barlen=20, 
+         color=:black
+    )
     update!(progress, 0)
     flush(stdout)
 
@@ -25,18 +33,24 @@ function compute_coulomb_vertex(basis,
     n_G   = length(kpt.G_vectors) # works only for 1-kpoint
     n_kpt = length(basis.kpoints)
     ΓmnG  = zeros(complex(T), n_kpt, n_bands, n_kpt, n_bands, n_G)
+
     @views for (ikn, kptn) in enumerate(basis.kpoints), n = 1:n_bands
         ψnk_real = ifft(basis, kptn, ψ[ikn][:, n])
+
         for (ikm, kptm) in enumerate(basis.kpoints)
             q = kptn.coordinate - kptm.coordinate
-            coeffs = sqrt.(DFTK.compute_coulomb_kernel(basis; q))
+            kernel_sqrt = sqrt.(DFTK.compute_coulomb_kernel(basis; q))
+
             for m in 1:n_bands
                 ψmk_real = ifft(basis, kptm, ψ[ikm][:, m])
-                ΓmnG[ikm, m, ikn, n, :] = coeffs .* fft(basis, kptn, conj(ψmk_real) .* ψnk_real) # kptn has to be some qptn (but works for Gamma-only)
-            end  # ψmk
-        end # kptm
-        next!(progress)
-    end  # kptn, ψnk
+
+                # kptn has to be some qptn (but works for Gamma-only)
+                overlap_density = fft(basis, kptn, conj(ψmk_real) .* ψnk_real)
+                ΓmnG[ikm, m, ikn, n, :] .= kernel_sqrt .* overlap_density
+            end  
+        end 
+        next!(progress) # update ProgressMeter
+    end  
     ΓmnG
 end
 function compute_coulomb_vertex(scfres::NamedTuple)
@@ -70,9 +84,11 @@ Base.eltype(op::CoulombGramian) = eltype(op.Γmat)
 LinearAlgebra.ishermitian(op::CoulombGramian) = true
 
 # thresh is in units of energy (Hartree)
-function svdcompress_coulomb_vertex(ΓmnG::AbstractArray{T,5}; thresh=1e-6) where {T}
+function svdcompress_coulomb_vertex(
+    ΓmnG::AbstractArray{T,5}; 
+    thresh=1e-6
+) where {T}
     Γmat = reshape(ΓmnG, prod(size(ΓmnG)[1:4]), size(ΓmnG, 5))
-
     NFguess = round(Int, 10*size(Γmat,1)^0.5)
     NG = size(Γmat,2)
     ϕk = randn(ComplexF64, NG, NFguess)

@@ -2,10 +2,12 @@
 
 using YAML
 
-function write_eigenenergies(folder::AbstractString,
-                             eigenvalues::AbstractVector,
-                             εF::Number;
-                             force=false)
+function write_eigenenergies(
+    folder::AbstractString,
+    eigenvalues::AbstractVector,
+    εF::Number;
+    force=false
+)
     @assert length(eigenvalues) == 1
     εk = eigenvalues[1]
 
@@ -44,8 +46,11 @@ function write_eigenenergies(folder::AbstractString,
 end
 
 
-function write_coulomb_vector(folder::AbstractString, ΓnmF::AbstractArray{T, 5};
-                              force=true) where {T}
+function write_coulomb_vertex(
+    folder::AbstractString, 
+    ΓnmF::AbstractArray{T, 5};
+    force=true
+) where {T}
     n_kpt   = size(ΓnmF, 1)
     n_bands = size(ΓnmF, 2)
     n_aux_field = size(ΓnmF, 5)
@@ -75,6 +80,7 @@ function write_coulomb_vector(folder::AbstractString, ΓnmF::AbstractArray{T, 5}
     )
     open(fp -> YAML.write(fp, data), yamlfile, "w")
 
+    # Cc4s is writte in C++
     # C++ is row-major, julia is column-major. Therefore we write
     # ΓnmF in a stream using chunks of all field Fs for given (n,m)
     open(elementsfile, "w") do fp
@@ -94,15 +100,15 @@ from `compute_bands` to the `folder` (by default `joinpath(pwd(), "cc4s")`).
 This will dump a number of `yaml` and binary/text data files
 to this folder. The files written will be returned by the function.
 If `force` is true then existing files will be overwritten.
-
-!!! warning "Experimental function"
-    This function is experimental, may not work in all cases or
-    may be changed incompatibly in the future (including patch version bumps).
 """
-function dump_cc4s_input(scfres::NamedTuple,
-                         folder::AbstractString=joinpath(pwd(), "cc4s");
-                         n_bands=scfres.n_bands_converge,
-                         force=false, auxfield_thresh=1e-6, Ecut_ratio=2/3)
+function dump_cc4s_files(
+    scfres::NamedTuple,
+    folder::AbstractString=joinpath(pwd(), "cc4s");
+    n_bands=scfres.n_bands_converge,
+    force=false, 
+    auxfield_thresh=1e-6, 
+    Ecut_ratio=2/3
+)
     mkpath(folder)
 
     eigenvalues = map(εk -> εk[1:n_bands], scfres.eigenvalues)
@@ -110,14 +116,18 @@ function dump_cc4s_input(scfres::NamedTuple,
 
     ΓmnG = compute_coulomb_vertex(scfres.basis, scfres.ψ; n_bands)
 
-    # set up a filter
+    # reduce the plane wave cutoff
     # this only works for Gamma-only now
     Ecut_reduced = scfres.basis.Ecut * Ecut_ratio
     basis = scfres.basis
     kpt = basis.kpoints[1]
     model = basis.model
-    G_mask = [sum(abs2, model.recip_lattice * G) / 2 <= Ecut_reduced
-              for G in kpt.G_vectors]
+
+    G_mask = [
+        sum(abs2, model.recip_lattice * G) / 2 <= Ecut_reduced
+        for G in kpt.G_vectors
+    ]
+
     G_indices = findall(G_mask)
     nG_reduced = length(G_indices)
     nk1, nb1, nk2, nb2, nG = size(ΓmnG)
@@ -125,7 +135,7 @@ function dump_cc4s_input(scfres::NamedTuple,
     ΓmnG_reduced[:,:,:,:,:] = ΓmnG[:,:,:,:,G_indices]
 
     Γcompress = svdcompress_coulomb_vertex(ΓmnG_reduced; thresh=auxfield_thresh)
-    files_coul = write_coulomb_vector(folder, Γcompress; force)
+    files_coul = write_coulomb_vertex(folder, Γcompress; force)
 
     append!(files_ene, files_coul)
 end
