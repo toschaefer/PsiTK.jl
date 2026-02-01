@@ -2,8 +2,11 @@
 
 # Wavefunction Toolkit
 
+[![](https://img.shields.io/badge/docs-dev-blue.svg)](https://toschaefer.github.io/PsiTK.jl/)
 [![Build Status](https://github.com/toschaefer/PsiTK.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/toschaefer/PsiTK.jl/actions/workflows/CI.yml?query=branch%3Amain)
-[![Status](https://img.shields.io/badge/Status-Experimental-orange)](https://github.com/toschaefer/PsiTK.jl)
+[![Status](https://img.shields.io/badge/Status-Experimental-red)](https://github.com/toschaefer/PsiTK.jl)
+
+
 
 **PsiTK** is a lightweight framework for developing correlated wavefunction workflows in the plane wave basis.
 
