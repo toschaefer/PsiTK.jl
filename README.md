@@ -1,4 +1,4 @@
-<p align="left"> <img src="docs/src/logo/PsiTK+name.png" alt="PostDFTK logo" height="100"> </p>
+<p align="left"> <img src="docs/src/assets/PsiTK+name.png" alt="PostDFTK logo" height="100"> </p>
 
 # Wavefunction Toolkit
 
