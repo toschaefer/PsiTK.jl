@@ -6,3 +6,4 @@ Welcome to the PsiTK documentation!
 
 ```@autodocs
 Modules = [PsiTK]
+```
