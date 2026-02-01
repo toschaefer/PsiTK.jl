@@ -1,20 +1,18 @@
 using Documenter
 using PsiTK 
 
-makedocs(;
-    modules = [PsiTK],
-    authors = "Tobias Schäfer",
+
+using Documenter
+using PsiTK 
+
+makedocs(
     sitename = "PsiTK.jl",
-    format = Documenter.HTML(;
-        prettyurls = get(ENV, "CI", "false") == "true",
-        canonical = "https://toschaefer.github.io/PsiTK.jl",
-        edit_link = "main",
-        logo = "logo/PsiTK.png", 
-    ),
+    modules  = [PsiTK],
+    authors = "Tobias Schäfer",
     pages = [
         "Home" => "index.md",
         "Manual" => "manual.md"
-    ],
+    ]
 )
 
 deploydocs(
