@@ -18,21 +18,27 @@ function compute_coulomb_vertex(
         # This requires appropriate insertion of kweights
     end
 
+    kpt   = basis.kpoints[1]
+    n_G   = length(G_vectors(basis, kpt)) # works only for 1-kpoint
+    n_kpt = length(basis.kpoints)
+
+    # create index to map G to -G
+    Gs  = G_vectors(basis, kpt)
+    G_to_idx    = Dict(Gs[i] => i for i in 1:n_G)
+    idx_minus_G = [G_to_idx[-Gs[i]] for i in 1:n_G]
+
+    # allocate coulomb vertex
+    ΓmnG  = zeros(complex(T), n_kpt, n_bands, n_kpt, n_bands, n_G)
+
+    # TODO: we need a callback structure for output
     # show progress via ProgressMeter
     progress = Progress(
-         n_bands*size(basis.kpoints,1); 
+         n_bands*(n_bands-1)÷2*size(basis.kpoints,1)^2; 
          desc="Compute Coulomb vertices", 
          dt=0.5, 
          barlen=20, 
          color=:black
     )
-    update!(progress, 0)
-    flush(stdout)
-
-    kpt   = basis.kpoints[1]
-    n_G   = length(kpt.G_vectors) # works only for 1-kpoint
-    n_kpt = length(basis.kpoints)
-    ΓmnG  = zeros(complex(T), n_kpt, n_bands, n_kpt, n_bands, n_G)
 
     @views for (ikn, kptn) in enumerate(basis.kpoints), n = 1:n_bands
         ψnk_real = ifft(basis, kptn, ψ[ikn][:, n])
@@ -42,14 +48,24 @@ function compute_coulomb_vertex(
             kernel_sqrt = sqrt.(DFTK.compute_coulomb_kernel(basis; q))
 
             for m in 1:n_bands
+                if m > n continue end # only for Gamma-only
+
                 ψmk_real = ifft(basis, kptm, ψ[ikm][:, m])
 
                 # kptn has to be some qptn (but works for Gamma-only)
                 overlap_density = fft(basis, kptn, conj(ψmk_real) .* ψnk_real)
                 ΓmnG[ikm, m, ikn, n, :] .= kernel_sqrt .* overlap_density
+
+                # TODO (Gamma only, no spin polarization)
+                # fill lower triangle via ΓmnG = ΓnmG*
+                if m != n
+                    mn_values = ΓmnG[ikm, m, ikn, n, :]
+                    ΓmnG[ikn, n, ikm, m, :] .= conj.(mn_values[idx_minus_G[:]])
+                end
+                
+                next!(progress) # update ProgressMeter
             end  
         end 
-        next!(progress) # update ProgressMeter
     end  
     ΓmnG
 end
@@ -83,10 +99,9 @@ Base.size(op::CoulombGramian) = (size(op.Γmat, 2), size(op.Γmat, 2))
 Base.eltype(op::CoulombGramian) = eltype(op.Γmat)
 LinearAlgebra.ishermitian(op::CoulombGramian) = true
 
-# thresh is in units of energy (Hartree)
 function svdcompress_coulomb_vertex(
     ΓmnG::AbstractArray{T,5}; 
-    thresh=1e-6
+    thresh=1e-6 # in Hartree
 ) where {T}
     Γmat = reshape(ΓmnG, prod(size(ΓmnG)[1:4]), size(ΓmnG, 5))
     NFguess = round(Int, 10*size(Γmat,1)^0.5)
@@ -98,26 +113,9 @@ function svdcompress_coulomb_vertex(
     
     E_GG = CoulombGramian(Γmat)
 
-    # estimate the required time (assuming init + 1 iteration)
-    flop_count = 2 * (2 * prod(size(Γmat)) * NFguess)     # 2 x application of E_GG
-    flop_count *= 2                                       # init + first iteration
-    flop_count += 2 * size(Γmat,2) * (3*NFguess)^2        # orthogonalization
-    flop_count *= (eltype(E_GG) <: Complex) ? 4 : 1       # times 4 for complex cases
-    flop_rate = 0.8*LinearAlgebra.peakflops(500) # assume 80% of peakflops
-    estimated_seconds = flop_count / flop_rate
-    time_str = if estimated_seconds < 10
-        "a few seconds"
-    elseif estimated_seconds < 120
-        "$(round(Int, estimated_seconds)) seconds"
-    elseif estimated_seconds < 7200
-        "$(round(Int, estimated_seconds / 60)) minutes"
-    else
-        "$(round(estimated_seconds / 3600, digits=1)) hours"
-    end
-    println("Compress Coulomb vertices. Estimated time (at $(round(Int, flop_rate/1e9)) GFLOPS): $time_str")
-
     lobpcg_thresh = thresh/10 # thresh for LOBPCG should be smaller than thresh
-    @time FFF = lobpcg_hyper(E_GG, ϕk; tol=lobpcg_thresh) 
+    println("Compress Coulomb vertices.")
+    @time FFF = DFTK.LOBPCG(E_GG, ϕk, I, I, lobpcg_thresh, 500, display_progress=true)
     nkeep = findlast(s -> abs(s) > thresh, FFF.λ)
     println("Compressed Coulomb vertices from NG=$(NG) to NF=$(nkeep).")
     @views if isnothing(nkeep)

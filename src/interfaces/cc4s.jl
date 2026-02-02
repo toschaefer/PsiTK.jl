@@ -111,29 +111,31 @@ function dump_cc4s_files(
 )
     mkpath(folder)
 
+    # === Eigenvalues ===
     eigenvalues = map(εk -> εk[1:n_bands], scfres.eigenvalues)
     files_ene = write_eigenenergies(folder, eigenvalues, scfres.εF; force)
 
+    # === Coulomb Vertex ===
     ΓmnG = compute_coulomb_vertex(scfres.basis, scfres.ψ; n_bands)
 
+    # # === Filter G vectors ===
     # reduce the plane wave cutoff
     # this only works for Gamma-only now
     Ecut_reduced = scfres.basis.Ecut * Ecut_ratio
     basis = scfres.basis
     kpt = basis.kpoints[1]
     model = basis.model
-
     G_mask = [
         sum(abs2, model.recip_lattice * G) / 2 <= Ecut_reduced
         for G in kpt.G_vectors
     ]
-
     G_indices = findall(G_mask)
     nG_reduced = length(G_indices)
     nk1, nb1, nk2, nb2, nG = size(ΓmnG)
     ΓmnG_reduced = zeros(eltype(ΓmnG), nk1, nb1, nk2, nb2, nG_reduced)
     ΓmnG_reduced[:,:,:,:,:] = ΓmnG[:,:,:,:,G_indices]
 
+    # === Compress Coulomb Vertex ===
     Γcompress = svdcompress_coulomb_vertex(ΓmnG_reduced; thresh=auxfield_thresh)
     files_coul = write_coulomb_vertex(folder, Γcompress; force)
 

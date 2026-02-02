@@ -4,6 +4,7 @@ using LinearAlgebra
 using DFTK
 
 
+export compute_coulomb_vertex
 include("coulomb_vertex.jl")
 
 export dump_cc4s_files
