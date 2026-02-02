@@ -10,7 +10,7 @@
 
 **PsiTK** is a lightweight framework for developing correlated wavefunction workflows in the plane wave basis.
 
-Built on top of [DFTK.jl](https://github.com/JuliaMolSim/DFTK.jl), it acts as the wavefunction-based counterpart for post-Hartree–Fock and beyond-DFT methods.
+Built on top of [DFTK.jl](https://github.com/JuliaMolSim/DFTK.jl) for self-consistent field calculations, PsiTK acts as the wavefunction counterpart, enabling post-Hartree–Fock and beyond-DFT methods.
 
 Features:
 
@@ -18,10 +18,13 @@ Features:
 * MP2 ground-state energy
 * interface to the high-performance coupled cluster (CC) solver [Cc4s](https://gitlab.cc4s.org/cc4s/cc4s), enabling CC calculations via the workflow DFTK &rarr; PsiTK &rarr; Cc4s.
 
+
 ## Motivation
 
-While established electronic codes (VASP, Quantum Espresso, ABINIT, CP2K, ...) are highly optimized for production calculations, their sheer scale can make implementing novel theoretical ideas challenging. 
-PsiTK fills this gap by minimizing the distance between scientific intuition and executable code, offering a flexible testbed without sacrificing readability or efficiency.
+While established electronic structure codes (VASP, Quantum Espresso, ABINIT, CP2K, ...) are highly optimized for production calculations, their monolithic architectures and accumulated historical complexity often create a high barrier to implementing new theories.
+
+PsiTK fills this gap by providing a clean and readable codebase written in Julia. It avoids the heavy structure of massive software packages, allowing researchers to implement and test new ideas quickly, minimizing the distance between scientific intuition and executable code.
+
 
 ## Usage (TOD)
 
