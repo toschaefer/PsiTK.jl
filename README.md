@@ -21,7 +21,7 @@ Features:
 
 ## Motivation
 
-While established electronic structure codes (VASP, Quantum Espresso, ABINIT, CP2K, ...) are highly optimized for production calculations, their monolithic architectures and accumulated historical complexity often create a high barrier to implementing new theories.
+While established electronic structure codes (VASP, Quantum Espresso, ABINIT, CP2K, ...) are highly optimized for production calculations, their monolithic architectures and accumulated historical complexity often create a high barrier to implementing new ideas.
 
 PsiTK fills this gap by providing a clean and readable codebase written in Julia. It avoids the heavy structure of massive software packages, allowing researchers to implement and test new ideas quickly, minimizing the distance between scientific intuition and executable code.
 
