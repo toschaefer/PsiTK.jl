@@ -26,23 +26,28 @@ While established electronic structure codes (VASP, Quantum Espresso, ABINIT, CP
 PsiTK fills this gap by providing a clean and readable codebase written in Julia. It avoids the heavy structure of massive software packages, allowing researchers to implement and test new ideas quickly, minimizing the distance between scientific intuition and executable code.
 
 
-## Usage (TOD)
+## Usage (TODO)
 
 ```julia
+using PsiTK
 using DFTK
 using PseudoPotentialData
-using PsiTK
+using TerminalLoggers
+using Logging        
 
+# Hartree-Fock calculation using DFTK
 pd_pbe_family = PseudoFamily("dojo.nc.sr.pbe.v0_5.stringent.upf") 
 Si = ElementPsp(:Si, pd_pbe_family)
-a = 10.26  # Silicon lattice constant in Bohr
+a = 10.26  
 lattice = a / 2 * [[0 1 1.];
                    [1 0 1.];
                    [1 1 0.]]
 atoms     = [Si, Si]
 positions = [ones(3)/8, -ones(3)/8]
-
 model  = model_HF(lattice, atoms, positions)
 basis  = PlaneWaveBasis(model; basis.Ecut, basis.kgrid)
 scfres = self_consistent_field(basis)
+
+# MP2 calculation using PsiTK
+global_logger(TerminalLogger()) # see PsiTK output on stdout
 ```
