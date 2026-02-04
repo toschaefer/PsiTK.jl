@@ -1,8 +1,10 @@
 module PsiTK
 
 using LinearAlgebra
+using ProgressLogging
 using DFTK
 
+include("callbacks.jl")
 
 export compute_coulomb_vertex
 include("coulomb_vertex.jl")

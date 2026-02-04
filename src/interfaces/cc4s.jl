@@ -104,21 +104,21 @@ If `force` is true then existing files will be overwritten.
 function dump_cc4s_files(
     scfres::NamedTuple,
     folder::AbstractString=joinpath(pwd(), "cc4s");
-    n_bands=scfres.n_bands_converge,
     force=false, 
     auxfield_thresh=1e-6, 
     Ecut_ratio=2/3
 )
     mkpath(folder)
+    n_bands=scfres.n_bands_converge
 
     # === Eigenvalues ===
     eigenvalues = map(εk -> εk[1:n_bands], scfres.eigenvalues)
     files_ene = write_eigenenergies(folder, eigenvalues, scfres.εF; force)
 
     # === Coulomb Vertex ===
-    ΓmnG = compute_coulomb_vertex(scfres.basis, scfres.ψ; n_bands)
+    ΓmnG = compute_coulomb_vertex(scfres)
 
-    # # === Filter G vectors ===
+    # === Filter G vectors ===
     # reduce the plane wave cutoff
     # this only works for Gamma-only now
     Ecut_reduced = scfres.basis.Ecut * Ecut_ratio
