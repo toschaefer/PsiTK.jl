@@ -61,3 +61,14 @@ scfres = self_consistent_field(basis)
 # MP2 calculation using PsiTK
 global_logger(TerminalLogger()) # see PsiTK output on stdout
 ```
+
+
+## Contributing
+
+Contributions via pull request are welcome. Please:
+
+- Add tests for new functionality
+- Follow existing code style
+- Keep PRs focused on a single change
+
+Questions? Open an issue.
