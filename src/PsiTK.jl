@@ -1,7 +1,9 @@
 module PsiTK
 
 using LinearAlgebra
-using ProgressLogging
+using Printf
+using ProgressMeter
+using TimerOutputs
 using DFTK
 
 include("callbacks.jl")

@@ -5,20 +5,17 @@ Compute the Coulomb vertex
 ```
 where `n_bands` is the number of bands to be considered.
 """
-function compute_coulomb_vertex(scfres::NamedTuple, callback=nothing)
+function compute_coulomb_vertex(scfres::NamedTuple)
     basis = scfres.basis
     n_bands = scfres.n_bands_converge
     nk = length(basis.kpoints) 
 
-    @withprogress name="Compute Coulomb Vertex" begin 
-        # === set up callback ===
-        total_steps = (n_bands*(n_bands+1)÷2)*nk^2 # only upper triangle of ΓmnG
-        internal_callback = make_coulomb_vertex_callback(total_steps, @progressid)
-        full_callback = chain_callbacks(internal_callback, callback)
+    # === set up callback ===
+    total_steps = (n_bands*(n_bands+1)÷2)*nk^2 # only upper triangle of ΓmnG
+    callback = make_coulomb_vertex_callback(total_steps)
 
-        # === compute Coulomb Vertex ===
-        _compute_coulomb_vertex(basis, scfres.ψ; n_bands, callback=full_callback)
-    end
+    # === compute Coulomb Vertex ===
+    _compute_coulomb_vertex(basis, scfres.ψ; n_bands, callback)
 end
 
 function _compute_coulomb_vertex(
@@ -91,10 +88,17 @@ end
 struct CoulombVertexInfo <: AbstractAlgoInfo 
     step::Int
 end
-function make_coulomb_vertex_callback(total_steps, progress_id)
+function make_coulomb_vertex_callback(total_steps)
+    p = Progress(
+        total_steps; 
+        desc="Computing Coulomb Vertex",
+        dt=0.5,
+        barlen=20,
+        barglyphs=BarGlyphs(' ', '━', '╸', '─', ' '),
+        color=:normal
+    )
     return function(info::CoulombVertexInfo)
-        fraction = info.step / total_steps
-        @logprogress fraction message="Computing Coulomb Vertex..." _id=progress_id
+        next!(p)
     end
 end
 
@@ -114,8 +118,18 @@ function svdcompress_coulomb_vertex(
     E_GG = CoulombGramian(Γmat)
 
     lobpcg_thresh = thresh/10 # thresh for LOBPCG should be smaller than thresh
-    println("Compress Coulomb vertices.")
-    @time FFF = DFTK.LOBPCG(E_GG, ϕk, I, I, lobpcg_thresh, 500, display_progress=true)
+    FFF = DFTK.LOBPCG(
+        E_GG, 
+        ϕk, 
+        I, 
+        I, 
+        lobpcg_thresh, 
+        500, 
+        callback=make_lobpcg_callback(
+            lobpcg_thresh; 
+            description="Compress Coulomb Vertex"
+        )
+    )
     nkeep = findlast(s -> abs(s) > thresh, FFF.λ)
     println("Compressed Coulomb vertices from NG=$(NG) to NF=$(nkeep).")
     @views if isnothing(nkeep)
@@ -171,17 +185,3 @@ Base.eltype(op::CoulombGramian) = eltype(op.Γmat)
 LinearAlgebra.ishermitian(op::CoulombGramian) = true
 
 
-
-# Info struct and callback generator for compress_coulomb_vertex
-struct CompressCoulombVertexInfo <: AbstractAlgoInfo 
-    iter::Int
-end
-function make_compress_vertex_callback(progress_id)
-    fraction = NaN # indeterminate state (required iterations unknown)
-    @logprogress fraction message="start compression" _id=progress_id
-    return function(info::CompressCoulombVertexInfo)
-        #message = "Iter: $(info.iter) | Time: $(round(info.time_taken, digits=4)) s"
-        message = "Iter: $(info.iter)"
-        @logprogress fraction message _id=progress_id
-    end
-end
