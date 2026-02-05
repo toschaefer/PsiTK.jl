@@ -10,6 +10,7 @@ ProgressLogging = "33c8b6b6-d38a-422a-b730-caa89a2f386c"
 YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 
 [compat]
+DFTK = "0.7"
 LinearAlgebra = "1.12.0"
 ProgressLogging = "0.1.6"
 YAML = "0.4.16"
