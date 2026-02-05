@@ -12,11 +12,21 @@
 
 Built on top of [DFTK.jl](https://github.com/JuliaMolSim/DFTK.jl) for self-consistent field calculations, PsiTK acts as the wavefunction counterpart, enabling post-Hartree–Fock and beyond-DFT methods.
 
-Features:
+PsiTK is currently under active development. Here's our planned trajectory:
 
-* virtual orbital space compression (e.g. natural orbitals)
-* MP2 ground-state energy
-* interface to the high-performance coupled cluster (CC) solver [Cc4s](https://gitlab.cc4s.org/cc4s/cc4s), enabling CC calculations via the workflow DFTK &rarr; PsiTK &rarr; Cc4s.
+- [x] Coulomb vertex computation
+- [x] Coulomb vertex compression
+- [x] [Cc4s](https://gitlab.cc4s.org/cc4s/cc4s) interface for coupled cluster calculations
+- [ ] Computation of natural orbitals
+- [ ] MP2 ground-state energy algorithm for quick reference calculations
+- [ ] support for spin-polarized calculations
+- [ ] GPU acceleration
+- [ ] MPI parallelization
+- [ ] Test suite
+- [ ] Documentation with examples
+
+
+We welcome input on priorities! Open an issue to discuss.
 
 
 ## Motivation
