@@ -14,11 +14,10 @@ Built on top of [DFTK.jl](https://github.com/JuliaMolSim/DFTK.jl) for self-consi
 
 PsiTK is currently under active development. Here's our planned trajectory:
 
-- [x] Coulomb vertex computation
-- [x] Coulomb vertex compression
+- [x] Compute and compress Coulomb vertex $`\Gamma^{Fa}_{c}`$ for Coulomb integrals $`v^{ab}_{cd} = \Gamma^{aF}_{c} \Gamma^{b}_{dF}`$.
 - [x] [Cc4s](https://gitlab.cc4s.org/cc4s/cc4s) interface for coupled cluster calculations
 - [ ] Computation of natural orbitals
-- [ ] MP2 ground-state energy algorithm for quick reference calculations
+- [ ] MP2 and RPA algorithms
 - [ ] support for spin-polarized calculations
 - [ ] GPU acceleration
 - [ ] MPI parallelization
@@ -38,6 +37,7 @@ PsiTK fills this gap by providing a clean and readable codebase written in Julia
 
 ## Usage (TODO)
 
+<!--
 ```julia
 using PsiTK
 using DFTK
@@ -61,7 +61,7 @@ scfres = self_consistent_field(basis)
 # MP2 calculation using PsiTK
 global_logger(TerminalLogger()) # see PsiTK output on stdout
 ```
-
+-->
 
 ## Contributing
 
