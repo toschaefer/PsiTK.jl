@@ -18,6 +18,7 @@ function compute_coulomb_vertex(scfres::NamedTuple)
     _compute_coulomb_vertex(basis, scfres.ψ; n_bands, callback)
 end
 
+# This function initially based on code of the experimental "cc4s" branch in DFTK written by Michael Herbst
 function _compute_coulomb_vertex(
     basis,
     ψ::AbstractVector{<:AbstractArray{T}};
