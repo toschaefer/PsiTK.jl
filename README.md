@@ -14,7 +14,7 @@ Built on top of [DFTK.jl](https://github.com/JuliaMolSim/DFTK.jl) for self-consi
 
 PsiTK is currently under active development. Here's our planned trajectory:
 
-- [x] Compute and compress Coulomb vertex $`\Gamma^{Fa}_{c}`$ for Coulomb integrals $`v^{ab}_{cd} = \Gamma^{aF}_{c} \Gamma^{b}_{dF}`$.
+- [x] Compute Coulomb vertex $`\Gamma^{Fa}_{c}`$ (density fitting) for Coulomb integrals $`v^{ab}_{cd} = \Gamma^{aF}_{c} \left(\Gamma^{bF}_{d}\right)^*`$.
 - [x] [Cc4s](https://gitlab.cc4s.org/cc4s/cc4s) interface for coupled cluster calculations
 - [ ] Computation of natural orbitals
 - [ ] MP2 and RPA algorithms
@@ -25,7 +25,7 @@ PsiTK is currently under active development. Here's our planned trajectory:
 - [ ] Documentation with examples
 
 
-We welcome input on priorities! Open an issue to discuss.
+We welcome input on priorities. Open an issue to discuss.
 
 
 ## Motivation
