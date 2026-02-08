@@ -10,20 +10,18 @@
 
 **PsiTK** is a lightweight framework for developing correlated wavefunction workflows in the plane wave basis.
 
-Built on top of [DFTK.jl](https://github.com/JuliaMolSim/DFTK.jl) for self-consistent field calculations, PsiTK acts as the wavefunction counterpart, enabling post-Hartree–Fock and beyond-DFT methods.
+Enabling post-Hartree–Fock and beyond-DFT methods for 3D models under periodic boundary conditions, PsiTK acts as the wavefunction couterpart of the [density-functional toolkit (DFTK.jl)](https://github.com/JuliaMolSim/DFTK.jl) and provides an interface to the massively parallel coupled cluster solver [Cc4s](https://gitlab.cc4s.org/cc4s/cc4s).
 
 PsiTK is currently under active development. Here's our planned trajectory:
 
-- [x] Compute Coulomb vertex $`\Gamma^{Fa}_{c}`$ (density fitting) for Coulomb integrals $`v^{ab}_{cd} = \Gamma^{aF}_{c} \left(\Gamma^{bF}_{d}\right)^*`$.
+- [x] Density fitting: Coulomb vertex $`\Gamma^{Fa}_{c}`$ for Coulomb integrals $`v^{ab}_{cd} = \Gamma^{aF}_{c} \left(\Gamma^{bF}_{d}\right)^*`$.
 - [x] [Cc4s](https://gitlab.cc4s.org/cc4s/cc4s) interface for coupled cluster calculations
-- [ ] Computation of natural orbitals
-- [ ] MP2 and RPA algorithms
-- [ ] support for spin-polarized calculations
-- [ ] GPU acceleration
-- [ ] MPI parallelization
 - [ ] Test suite
 - [ ] Documentation with examples
-
+- [ ] Natural orbitals
+- [ ] MP2 and RPA
+- [ ] spin-polarization
+- [ ] GPU acceleration / MPI parallelization
 
 We welcome input on priorities. Open an issue to discuss.
 
