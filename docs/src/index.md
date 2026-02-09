@@ -1,6 +1,6 @@
 # PsiTK.jl
 
-PsiTK is a Julia package that serves as a bridge between the plane wave-based [Density-Functional Toolkit (DFTK.jl)](https://github.com/JuliaMolSim/DFTK.jl) and electron correlation solvers, such as the massively parallel coupled cluster code [Cc4s](https://gitlab.cc4s.org/cc4s/cc4s).
+PsiTK is a Julia package that serves as a bridge between the plane wave-based [Density-Functional Toolkit (DFTK.jl)](https://docs.dftk.org) and electron correlation solvers, such as the massively parallel coupled cluster code [Cc4s](https://gitlab.cc4s.org/cc4s/cc4s).
 
 ![workflow](assets/workflow.png)
 
