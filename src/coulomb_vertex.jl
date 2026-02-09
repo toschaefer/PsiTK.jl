@@ -85,7 +85,6 @@ function _compute_coulomb_vertex(
     ΓmnG
 end
 
-
 function make_coulomb_vertex_callback(total_steps)
     p = Progress(
         total_steps; 
@@ -109,8 +108,8 @@ Abstract type for different strategies of compressing the
 Coulomb vertex $\Gamma_{nm}^G$.
 
 Available models:
-- [`CoulombGramian`](@ref) (default)
-- [`AdaptiveRandomizedSVD`](@ref)
+- [`CoulombGramian`](@ref) 
+- [`AdaptiveRandomizedSVD`](@ref) (default)
 """
 abstract type ΓCompressionStrategy end
 
@@ -118,27 +117,13 @@ abstract type ΓCompressionStrategy end
 raw"""
     compress_coulomb_vertex(ΓmnG; thresh=1e-6, 
 
-Compute Coulomb kernel, i.e. essentially ``v(G+q) = 4π/|G+q|²``, on spherical plane-wave grid.
+TODO
 
-Returns the Fourier-space Coulomb interaction for momentum transfer `q`,
-evaluated only on the spherical cutoff |G+q|² < 2Ecut (not the full cubic FFT grid).
-
-!!! note "Gamma-point only"
-    Currently only works for single k-point calculations (Gamma-only).
-    For general k-points, a q-dependent basis would be needed.
-
-# Arguments
-- `basis::PlaneWaveBasis`: Plane-wave basis defining the grid
-- `q=zero(Vec3)`: Momentum transfer vector in fractional coordinates
-- `coulomb_kernel_model::CoulombKernelModel=ProbeCharge()`: Method for treating singularity
-
-# Returns
-Vector of Coulomb kernel values for each G-vector in the spherical cutoff.
 """
 function compress_coulomb_vertex(
     ΓmnG::AbstractArray{T,5}; 
     thresh=1e-6, # in Hartree
-    compression_strategy::ΓCompressionStrategy=CoulombGramian()
+    compression_strategy::ΓCompressionStrategy=AdaptiveRandomizedSVD()
 ) where {T}
     _compress_coulomb_vertex(ΓmnG, thresh, compression_strategy)
 end
@@ -146,6 +131,8 @@ end
 
 raw"""
     CoulombGramian <: ΓCompressionStrategy
+
+AdaptiveRandomizedSVD
 """
 struct CoulombGramian <: ΓCompressionStrategy end
 function _compress_coulomb_vertex(
@@ -162,7 +149,7 @@ function _compress_coulomb_vertex(
     if isnothing(NF)
         ΓmnG
     else
-        ΓmnF = Γ_proj * U[:, 1:NF]           # rotate
+        ΓmnF = Γmat * U[:, 1:NF]           # rotate
         reshape(ΓmnF, size(ΓmnG)[1:4]..., NF)
     end
 end
