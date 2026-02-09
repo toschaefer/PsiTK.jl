@@ -11,8 +11,8 @@ makedocs(
     authors = "Tobias Schäfer",
     pages = [
         "Home" => "index.md",
-        "Manual" => "manual.md"
-        "API Reference" => "api.md"
+        "Manual" => "manual.md",
+        "API Reference" => "api.md",
     ]
 )
 
