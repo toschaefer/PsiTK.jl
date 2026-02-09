@@ -14,7 +14,7 @@ Enabling post-Hartree–Fock and beyond-DFT methods for 3D models under periodic
 
 PsiTK is currently under active development. Here's our planned trajectory:
 
-- [x] Density fitting: Coulomb vertex $`\Gamma^{Fa}_{c}`$ for Coulomb integrals $`v^{ab}_{cd} = \Gamma^{aF}_{c} \left(\Gamma^{bF}_{d}\right)^*`$.
+- [x] Resolution-of-identity decomposition (density fitting) of the electron repulsion integrals
 - [x] [Cc4s](https://gitlab.cc4s.org/cc4s/cc4s) interface for coupled cluster calculations
 - [ ] Test suite
 - [ ] Documentation with examples
