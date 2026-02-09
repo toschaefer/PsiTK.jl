@@ -1,4 +1,4 @@
-raw"""
+@doc raw"""
 Compute the Coulomb vertex
 ```math
 Γ_{\bm km, \bm kn \bm G} = \int_Ω \sqrt{\frac{4π}{\bm G^2}} e^{-i\bm r \bm G} \psi_{\bm km}^∗ \psi_{\bm k' n} dr
@@ -101,7 +101,7 @@ end
 
 
 
-raw"""
+@doc raw"""
     ΓCompressionStrategy
 
 Abstract type for different strategies of compressing the 
@@ -114,7 +114,7 @@ Available models:
 abstract type ΓCompressionStrategy end
 
 
-raw"""
+@doc raw"""
     compress_coulomb_vertex(ΓmnG; thresh=1e-6, 
 
 TODO
@@ -129,7 +129,7 @@ function compress_coulomb_vertex(
 end
 
 
-raw"""
+@doc raw"""
     CoulombGramian <: ΓCompressionStrategy
 
 AdaptiveRandomizedSVD
@@ -155,7 +155,7 @@ function _compress_coulomb_vertex(
 end
 
 
-raw"""
+@doc raw"""
     AdaptiveRandomizedSVD <: ΓCompressionStrategy
 
 Compressing the Coulomb vertex $\Gamma_{mn}^{G}$ through an adaptive randomized SVD.
@@ -210,7 +210,7 @@ function _compress_coulomb_vertex(
     
     # Iterate until convergence
     while current_error > target_error && size(Q, 2) < NG
-        Ω = randn(T, Npp, column_block_size) # Draw a new random block
+        Ω = randn(T, Npp, column_block_size) # D@doc raw a new random block
         Y_block = Γmat' * Ω                  # Project Γ onto Ω
         
         # Orthogonalize Y_block against existing Q (Gram-Schmidt)
