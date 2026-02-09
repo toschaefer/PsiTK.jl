@@ -1,6 +1,5 @@
-<p align="left"> <img src="docs/src/assets/PsiTK+name.png" alt="PostDFTK logo" height="80"> </p>
+# PsiTK.jl the Wavefunction Toolkit  <img align="right" src="docs/src/assets/PsiTK+name.png" height=45> 
 
-# Wavefunction Toolkit
 
 [![Docs](https://img.shields.io/badge/docs-dev-blue.svg)](https://toschaefer.github.io/PsiTK.jl/dev)
 [![Build Status](https://github.com/toschaefer/PsiTK.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/toschaefer/PsiTK.jl/actions/workflows/CI.yml?query=branch%3Amain)
@@ -9,6 +8,7 @@
 
 
 **PsiTK** is a lightweight framework for developing correlated wavefunction workflows in the plane wave basis.
+
 
 Enabling post-Hartree–Fock and beyond-DFT methods for 3D models under periodic boundary conditions, PsiTK acts as the wavefunction couterpart of the [density-functional toolkit (DFTK.jl)](https://github.com/JuliaMolSim/DFTK.jl) and provides an interface to the massively parallel coupled cluster solver [Cc4s](https://gitlab.cc4s.org/cc4s/cc4s).
 
