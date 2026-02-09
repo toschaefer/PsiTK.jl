@@ -36,11 +36,11 @@ function _compute_coulomb_vertex(
     # allocate coulomb vertex
     ΓmnG  = zeros(complex(T), n_kpt, n_bands, n_kpt, n_bands, n_G)
 
-    # Callback
-    step_counter = 0
-    if !isnothing(callback)
-        callback(CoulombVertexInfo(step_counter))
-    end
+    # TODO:
+    # Idea is to make some outer loop over the m-slices
+    # for m_slice in m_slices
+    #     precalculate ψmk_real for all m in this slice
+    # end
 
     # === Calculate Coulomb Vertex ΓmnG ===
     @views for (ikn, kptn) in enumerate(basis.kpoints), n = 1:n_bands
@@ -57,25 +57,26 @@ function _compute_coulomb_vertex(
                 # The lower triangle is filled via Hermitian conjugation below.
                 if m > n continue end 
 
-                # Prepare ψmk(r)
+                # Prepare ψmk(r) 
+                # TODO: pre-calculate some of them (not all because virtual space can be large)
                 ψmk_real = ifft(basis, kptm, ψ[ikm][:, m])
 
                 # Calcualte overlap density ρ_nm(r) = ψm*(r)ψn(r) and FFT to reciprocal space
-                overlap_density = fft(basis, kptn, conj(ψmk_real) .* ψnk_real)
+                overlap_density = fft(basis, kptn, conj.(ψmk_real) .* ψnk_real)
 
                 # store entry of Coulomb Vertex 
                 ΓmnG[ikm, m, ikn, n, :] .= kernel_sqrt .* overlap_density
 
                 # Fill lower triangle via Γmn(-G) = conjg(ΓnmG)
                 if m != n
-                    value = ΓmnG[ikm, m, ikn, n, :]
-                    ΓmnG[ikn, n, ikm, m, :] .= conj.(value[idx_minus_G[:]])
+                    #value = ΓmnG[ikm, m, ikn, n, :]
+                    #ΓmnG[ikn, n, ikm, m, :] .= conj.(@view value[idx_minus_G])
+                    ΓmnG[ikn, n, ikm, m, :] .= conj.(view(ΓmnG, ikm, m, ikn, n, idx_minus_G))
                 end
                 
                 # Callback
-                step_counter += 1
                 if !isnothing(callback)
-                    callback(CoulombVertexInfo(step_counter))
+                    callback()
                 end
             end  
         end 
@@ -84,10 +85,6 @@ function _compute_coulomb_vertex(
 end
 
 
-# Info struct and callback generator for compute_coulomb_vertex
-struct CoulombVertexInfo <: AbstractAlgoInfo 
-    step::Int
-end
 function make_coulomb_vertex_callback(total_steps)
     p = Progress(
         total_steps; 
@@ -97,91 +94,164 @@ function make_coulomb_vertex_callback(total_steps)
         barglyphs=BarGlyphs(' ', '━', '╸', '─', ' '),
         color=:normal
     )
-    return function(info::CoulombVertexInfo)
+    return function()
         next!(p)
     end
 end
 
 
-function svdcompress_coulomb_vertex(
+
+raw"""
+    ΓCompressionStrategy
+
+Abstract type for different strategies of compressing the 
+Coulomb vertex $\Gamma_{nm}^G$.
+
+Available models:
+- [`CoulombGramian`](@ref) (default)
+- [`AdaptiveRandomizedSVD`](@ref)
+"""
+abstract type ΓCompressionStrategy end
+
+
+raw"""
+    compress_coulomb_vertex(ΓmnG; thresh=1e-6, 
+
+Compute Coulomb kernel, i.e. essentially ``v(G+q) = 4π/|G+q|²``, on spherical plane-wave grid.
+
+Returns the Fourier-space Coulomb interaction for momentum transfer `q`,
+evaluated only on the spherical cutoff |G+q|² < 2Ecut (not the full cubic FFT grid).
+
+!!! note "Gamma-point only"
+    Currently only works for single k-point calculations (Gamma-only).
+    For general k-points, a q-dependent basis would be needed.
+
+# Arguments
+- `basis::PlaneWaveBasis`: Plane-wave basis defining the grid
+- `q=zero(Vec3)`: Momentum transfer vector in fractional coordinates
+- `coulomb_kernel_model::CoulombKernelModel=ProbeCharge()`: Method for treating singularity
+
+# Returns
+Vector of Coulomb kernel values for each G-vector in the spherical cutoff.
+"""
+function compress_coulomb_vertex(
     ΓmnG::AbstractArray{T,5}; 
-    thresh=1e-6 # in Hartree
+    thresh=1e-6, # in Hartree
+    compression_strategy::ΓCompressionStrategy=CoulombGramian()
+) where {T}
+    _compress_coulomb_vertex(ΓmnG, thresh, compression_strategy)
+end
+
+
+raw"""
+    CoulombGramian <: ΓCompressionStrategy
+"""
+struct CoulombGramian <: ΓCompressionStrategy end
+function _compress_coulomb_vertex(
+    ΓmnG::AbstractArray{T,5},
+    thresh, # in Hartree
+    ::CoulombGramian
 ) where {T}
     Γmat = reshape(ΓmnG, prod(size(ΓmnG)[1:4]), size(ΓmnG, 5))
-    NFguess = round(Int, 10*size(Γmat,1)^0.5)
-    NG = size(Γmat,2)
-    ϕk = randn(ComplexF64, NG, NFguess)
-    for a in 1:NFguess
-        ϕk[:,a] ./= norm(ϕk[:,a]) # normalize
-    end
-    
-    E_GG = CoulombGramian(Γmat)
+    Npp, NG = size(Γmat)
 
-    lobpcg_thresh = thresh/10 # thresh for LOBPCG should be smaller than thresh
-    FFF = DFTK.LOBPCG(
-        E_GG, 
-        ϕk, 
-        I, 
-        I, 
-        lobpcg_thresh, 
-        500, 
-        callback=make_lobpcg_callback(
-            lobpcg_thresh; 
-            description="Compress Coulomb Vertex"
-        )
-    )
-    nkeep = findlast(s -> abs(s) > thresh, FFF.λ)
-    println("Compressed Coulomb vertices from NG=$(NG) to NF=$(nkeep).")
-    @views if isnothing(nkeep)
+    E_GG = -Hermitian(Γmat' * Γmat)         # Gramian in full PW basis
+    λ, U = eigen(E_GG)                      # diagonalize
+    NF = findlast(s -> abs(s) > thresh, λ)  # truncate based on thresh
+    if isnothing(NF)
         ΓmnG
     else
-        cΓmat = Γmat * FFF.X[:, 1:nkeep] 
-        reshape(cΓmat, size(ΓmnG)[1:4]..., nkeep)
+        ΓmnF = Γ_proj * U[:, 1:NF]           # rotate
+        reshape(ΓmnF, size(ΓmnG)[1:4]..., NF)
     end
-     
-    #@time U, S, V = tsvd(Γmat, NFguess; tolconv=tolconv, maxiter=maxiter)
-    ##@time res = eigen(Γmat' * Γmat)
-    #@time F = svd(Γmat)
-
-    #Serror = abs.(S - F.S[1:NFguess])
-    ##println(Serror)
-    ##println(" ")
-    #println("max error at: ", findmax(Serror))
-
-    #tol = sqrt(thresh) # singular values are sqrt of energies
-    #nkeep = findlast(s -> abs(s) > tol, F.S)
-    #@views if isnothing(nkeep)
-    #    ΓmnG
-    #else
-    #    cΓmat = F.U[:, 1:nkeep] * Diagonal(F.S[1:nkeep])
-    #    reshape(cΓmat, size(ΓmnG)[1:4]..., nkeep)
-    #end
 end
 
 
-# CoulombGramian E(G,G') defined as E = -Γ^† * Γ, where Γ(ab,G) = <a|G|b>
-# see Eq. (10) in Hummel et al., JCTC (doi.org/10.1063/1.4977994).
-# The operator CoulombGramian enables efficient application to a vector
-# E*v = -Γ^† * (Γ*v) without full construction of E(G,G')
-# in order to diagonalize E through iterative methods.
-struct CoulombGramian{T}
-    Γmat::T
+raw"""
+    AdaptiveRandomizedSVD <: ΓCompressionStrategy
+
+Compressing the Coulomb vertex $\Gamma_{mn}^{G}$ through an adaptive randomized SVD.
+
+This algorithm approximates the range of the row space of $\Gamma$ (the orbital indices
+are considered as superindex) through a thin basis Q, such that
+```math
+\Gamma \approx \Gamma Q Q^\dagger
+```
+where $\Gamma$ is a $N_{pp} \times N_G$ and $Q$ a $N_G \times N_F$ matrix.
+This is done through a stochastic Q and a diagonalization of
+```math
+E = -\tilde \Gamma^\dagger \tilde \Gamma = U D U^\dagger
+```    
+where $\tilde \Gamma = \Gamma Q$. 
+The compressed $\Gamma$ is then obtained via $\Gamma_\text{compressed} = \tilde \Gamma U$.
+
+The dimension $N_F$ is found by a preceding adaptive range finder. 
+This finder iteratively increases the columns of Q (i.e. $N_F$) in steps of $\sqrt{N_{pp}}$ 
+and stops when the error for a stochastic test vector $\omega$
+```math
+\varepsilon = \frac{ \Vert (1 - QQ^\dagger)\Gamma^\dagger \omega \Vert}{\Vert \omega \Vert}
+```
+is smaller than thresh/10.
+"""
+struct AdaptiveRandomizedSVD <: ΓCompressionStrategy end
+function _compress_coulomb_vertex(
+    ΓmnG::AbstractArray{T,5},
+    thresh, # in Hartree
+    ::AdaptiveRandomizedSVD
+) where {T}
+    Γmat = reshape(ΓmnG, prod(size(ΓmnG)[1:4]), size(ΓmnG, 5))
+    Npp, NG = size(Γmat)
+    
+    # === Adaptive Range Finder for NF ===
+    
+    # Matrix for the stochastic guess basis (intially empty)
+    Q = Matrix{T}(undef, NG, 0) 
+
+    # Step size for increasing the basis = (√Npp)/10
+    column_block_size = round(Int, Npp^0.5)  
+    
+    # Stochastic test vector for error estimation
+    ω = randn(T, Npp) 
+    ω_norm = norm(ω)
+    
+    # target error a little smaller than √thresh
+    target_error = sqrt(thresh)/10
+
+    # set current error initially larger than stop criterion 
+    current_error = 2 * target_error
+    
+    # Iterate until convergence
+    while current_error > target_error && size(Q, 2) < NG
+        Ω = randn(T, Npp, column_block_size) # Draw a new random block
+        Y_block = Γmat' * Ω                  # Project Γ onto Ω
+        
+        # Orthogonalize Y_block against existing Q (Gram-Schmidt)
+        if size(Q, 2) > 0
+            coeffs = Q' * Y_block
+            Y_block .-= Q * coeffs
+        end
+        
+        Q_block = Matrix(qr(Y_block).Q) # Orthonormalize block itself (QR)
+        Q = hcat(Q, Q_block)            # Update stochastic basis Q
+        
+        # current_error = || Γ' * ω - Q * (Q' * Γ' * ω) || / ||ω||
+        proj_ω = Γmat' * ω
+        coeffs_ω = Q' * proj_ω
+        rem_ω = proj_ω - Q * coeffs_ω
+        current_error = norm(rem_ω) / ω_norm
+    end
+
+    # === Compression Step ===
+    Γ_proj = Γmat * Q                       # Project Γ onto Q 
+    E_GG = -Hermitian(Γ_proj' * Γ_proj)     # Gramian in Q basis
+    λ, U = eigen(E_GG)                      # diagonalize
+    NF = findlast(s -> abs(s) > thresh, λ)  # truncate based on thresh
+    if isnothing(NF)
+        ΓmnG
+    else
+        ΓmnF = Γ_proj * U[:, 1:NF]           # rotate
+        reshape(ΓmnF, size(ΓmnG)[1:4]..., NF)
+    end
 end
-function LinearAlgebra.mul!(Y, op::CoulombGramian, X)
-    T = eltype(op)
-    Ywork = zeros(T, size(op.Γmat,1), size(X,2))
-    mul!(Ywork, op.Γmat, X, -1.0, 0.0)
-    mul!(Y, op.Γmat', Ywork)
-    return Y
-end
-function Base.:*(op::CoulombGramian, X::AbstractMatrix)
-    T_out = promote_type(eltype(op), eltype(X))
-    Y = similar(X, T_out)
-    mul!(Y, op, X) 
-    return Y
-end
-Base.size(op::CoulombGramian) = (size(op.Γmat, 2), size(op.Γmat, 2))
-Base.eltype(op::CoulombGramian) = eltype(op.Γmat)
-LinearAlgebra.ishermitian(op::CoulombGramian) = true
 
 

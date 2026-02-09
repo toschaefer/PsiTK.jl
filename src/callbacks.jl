@@ -1,6 +1,7 @@
 """
 Abstract parent type for all algorithm states for callbacks.
 Any new algorithm can define a struct that inherits from this.
+(currently not used)
 """
 abstract type AbstractAlgoInfo end
 

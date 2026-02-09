@@ -116,7 +116,7 @@ function dump_cc4s_files(
     files_ene = write_eigenenergies(folder, eigenvalues, scfres.εF; force)
 
     # === Coulomb Vertex ===
-    ΓmnG = compute_coulomb_vertex(scfres)
+    @time ΓmnG = compute_coulomb_vertex(scfres)
 
     # === Filter G vectors ===
     # reduce the plane wave cutoff
@@ -136,7 +136,11 @@ function dump_cc4s_files(
     ΓmnG_reduced[:,:,:,:,:] = ΓmnG[:,:,:,:,G_indices]
 
     # === Compress Coulomb Vertex ===
-    Γcompress = svdcompress_coulomb_vertex(ΓmnG_reduced; thresh=auxfield_thresh)
+    @time Γcompress = compress_coulomb_vertex(
+        ΓmnG_reduced; 
+        thresh=auxfield_thresh,
+        compression_strategy=AdaptiveRandomizedSVD()
+    )
     files_coul = write_coulomb_vertex(folder, Γcompress; force)
 
     append!(files_ene, files_coul)
