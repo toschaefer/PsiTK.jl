@@ -10,8 +10,3 @@ This encompasses a range of functions, including the definition and compression 
 Furthermore, PsiTK natively includes algorithms for MP2 and RPA calculations.
 
 
-## API Reference
-
-```@autodocs
-Modules = [PsiTK]
-```
