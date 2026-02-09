@@ -1,4 +1,4 @@
-# PsiTK.jl the Wavefunction Toolkit  <img align="right" src="docs/src/assets/PsiTK+name.png" height=45> 
+# <img align="right" src="docs/src/assets/PsiTK+name.png" height="45" alt="PsiTK Logo"> PsiTK: The Wavefunction Toolkit
 
 
 [![Docs](https://img.shields.io/badge/docs-dev-blue.svg)](https://toschaefer.github.io/PsiTK.jl/dev)
