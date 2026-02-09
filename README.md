@@ -4,7 +4,7 @@
 
 [![](https://img.shields.io/badge/docs-dev-blue.svg)](https://toschaefer.github.io/PsiTK.jl/)
 [![Build Status](https://github.com/toschaefer/PsiTK.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/toschaefer/PsiTK.jl/actions/workflows/CI.yml?query=branch%3Amain)
-[![Status](https://img.shields.io/badge/Status-Experimental-red)](https://github.com/toschaefer/PsiTK.jl)
+[![Status](https://img.shields.io/badge/Status-pre_alpha-red)](https://github.com/toschaefer/PsiTK.jl)
 
 
 
