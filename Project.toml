@@ -1,6 +1,6 @@
 name = "PsiTK"
 uuid = "d89be4ce-3048-45c0-87f5-cd5ed04aaed3"
-version = "1.0.0-DEV"
+version = "0.1.0-DEV"
 authors = ["Tobias Schäfer"]
 
 [deps]

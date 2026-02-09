@@ -1,22 +1,29 @@
-<p align="left"> <img src="docs/src/assets/PsiTK+name.png" alt="PostDFTK logo" height="100"> </p>
+<p align="left"> <img src="docs/src/assets/PsiTK+name.png" alt="PostDFTK logo" height="80"> </p>
 
 # Wavefunction Toolkit
 
-[![](https://img.shields.io/badge/docs-dev-blue.svg)](https://toschaefer.github.io/PsiTK.jl/)
+[![Docs](https://img.shields.io/badge/docs-dev-blue.svg)](https://toschaefer.github.io/PsiTK.jl/dev)
 [![Build Status](https://github.com/toschaefer/PsiTK.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/toschaefer/PsiTK.jl/actions/workflows/CI.yml?query=branch%3Amain)
-[![Status](https://img.shields.io/badge/Status-Experimental-red)](https://github.com/toschaefer/PsiTK.jl)
+[![Status](https://img.shields.io/badge/Status-pre_alpha-red)](https://github.com/toschaefer/PsiTK.jl)
 
 
 
 **PsiTK** is a lightweight framework for developing correlated wavefunction workflows in the plane wave basis.
 
-Built on top of [DFTK.jl](https://github.com/JuliaMolSim/DFTK.jl) for self-consistent field calculations, PsiTK acts as the wavefunction counterpart, enabling post-Hartree–Fock and beyond-DFT methods.
+Enabling post-Hartree–Fock and beyond-DFT methods for 3D models under periodic boundary conditions, PsiTK acts as the wavefunction couterpart of the [density-functional toolkit (DFTK.jl)](https://github.com/JuliaMolSim/DFTK.jl) and provides an interface to the massively parallel coupled cluster solver [Cc4s](https://gitlab.cc4s.org/cc4s/cc4s).
 
-Features:
+PsiTK is currently under active development. Here's our planned trajectory:
 
-* virtual orbital space compression (e.g. natural orbitals)
-* MP2 ground-state energy
-* interface to the high-performance coupled cluster (CC) solver [Cc4s](https://gitlab.cc4s.org/cc4s/cc4s), enabling CC calculations via the workflow DFTK &rarr; PsiTK &rarr; Cc4s.
+- [x] Resolution-of-identity decomposition (density fitting) of the electron repulsion integrals
+- [x] [Cc4s](https://gitlab.cc4s.org/cc4s/cc4s) interface for coupled cluster calculations
+- [ ] Test suite
+- [ ] Documentation with examples
+- [ ] Natural orbitals
+- [ ] MP2 and RPA
+- [ ] spin-polarization
+- [ ] GPU acceleration / MPI parallelization
+
+We welcome input on priorities. Open an issue to discuss.
 
 
 ## Motivation
@@ -28,6 +35,7 @@ PsiTK fills this gap by providing a clean and readable codebase written in Julia
 
 ## Usage (TODO)
 
+<!--
 ```julia
 using PsiTK
 using DFTK
@@ -51,3 +59,4 @@ scfres = self_consistent_field(basis)
 # MP2 calculation using PsiTK
 global_logger(TerminalLogger()) # see PsiTK output on stdout
 ```
+-->
