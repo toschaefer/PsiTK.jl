@@ -12,7 +12,7 @@ makedocs(
     checkdocs = :exports,
     format = Documenter.HTML(;
         sidebar_sitename = false, 
-    )
+    ),
     pages = [
         "Home" => "index.md",
         "Manual" => "manual.md",
