@@ -97,11 +97,24 @@ end
 
 
 """
-Write CC4S input files from an SCF result `scfres` or an output
-from `compute_bands` to the `folder` (by default `joinpath(pwd(), "cc4s")`).
-This will dump a number of `yaml` and binary/text data files
-to this folder. The files written will be returned by the function.
-If `force` is true then existing files will be overwritten.
+    dump_cc4s_files(
+        scfres::NamedTuple,
+        folder::AbstractString=joinpath(pwd(), "cc4s");
+        force=false, 
+        auxfield_thresh=1e-6, 
+        Ecut_ratio=2/3
+    )
+
+Write Cc4s input files (*.yaml and *.elements):
+- EigenEnergies
+- CoulombVertex.yaml
+
+# Arguments
+- `scfres`: the SCF result from DFTK
+- `folder`: the target folder
+- `force`: if true existing files will be overwritten
+- `auxfield_thresh`: threshold (in Hartree) for the compression of the Coulomb vertex
+- `Ecut_ratio`: factor to reduce the plane wave cutoff 
 """
 function dump_cc4s_files(
     scfres::NamedTuple,

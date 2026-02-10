@@ -9,6 +9,7 @@ using DFTK
 include("callbacks.jl")
 
 export compute_coulomb_vertex
+export compress_coulomb_vertex
 export AdaptiveRandomizedSVD
 export CoulombGramian
 include("coulomb_vertex.jl")

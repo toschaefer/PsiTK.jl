@@ -1,5 +1,8 @@
 @doc raw"""
-    compute_coulomb_vertex(scfres::NamedTuple)
+    compute_coulomb_vertex(
+        scfres::NamedTuple;
+        n_bands=scfres.n_bands_converge
+    )
 
 Compute the Coulomb vertex
 ```math
@@ -150,7 +153,7 @@ eigenvalues of the Coulomb Gramian
 H = - \Gamma^\dagger \Gamma = U \Lambda U^\dagger
 ```    
 The compressed $\Gamma$ is then obtained via $\Gamma_\text{compressed} = \Gamma U$,
-where the rows of $U$ are restricted such that $\lambda >$ `thresh`.
+where the columns of $U$ are restricted such that $\lambda >$ `thresh`.
 """
 struct CoulombGramian <: ΓCompressionStrategy end
 function _compress_coulomb_vertex(
