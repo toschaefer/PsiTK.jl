@@ -11,7 +11,7 @@ function chain_callbacks(callbacks...)
         return first(valid_callbacks)
     else
         # Return a functor that iterates through them
-        return function(info::AbstractAlgoInfo)
+        return function(info)
             for cb in valid_callbacks
                 cb(info)
             end
