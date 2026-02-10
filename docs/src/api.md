@@ -2,5 +2,6 @@
 
 ```@autodocs
 Modules = [PsiTK]
+Private = false
 ```
 
