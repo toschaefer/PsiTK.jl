@@ -9,6 +9,10 @@ makedocs(
     sitename = "PsiTK.jl",
     modules  = [PsiTK],
     authors = "Tobias Schäfer",
+    checkdocs = :exports,
+    format = Documenter.HTML(;
+        sidebar_sitename = false, 
+    )
     pages = [
         "Home" => "index.md",
         "Manual" => "manual.md",
