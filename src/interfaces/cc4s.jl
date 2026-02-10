@@ -2,6 +2,7 @@
 
 using YAML
 
+# Write EigenEnergies.yaml and EigenEnergies.elements
 function write_eigenenergies(
     folder::AbstractString,
     eigenvalues::AbstractVector,
@@ -46,6 +47,7 @@ function write_eigenenergies(
 end
 
 
+# Write CoulombVertex.yaml and CoulombVertex.elements
 function write_coulomb_vertex(
     folder::AbstractString, 
     ΓnmF::AbstractArray{T, 5};

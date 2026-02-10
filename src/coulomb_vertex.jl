@@ -1,13 +1,22 @@
 @doc raw"""
+    compute_coulomb_vertex(scfres::NamedTuple)
+
 Compute the Coulomb vertex
 ```math
-Γ_{\bm km, \bm kn \bm G} = \int_Ω \sqrt{\frac{4π}{\bm G^2}} e^{-i\bm r \bm G} \psi_{\bm km}^∗ \psi_{\bm k' n} dr
+Γ_{mn \bm G} = \int_Ω  \; \sqrt{v(\bm G)} \; \psi_{m}(\bm r)^∗ \psi_{n}(\bm r)  \; e^{-i\bm r \bm G}  \; d^3 r
 ```
-where `n_bands` is the number of bands to be considered.
+where $v(\bm G)$ is the Coulomb potential, e.g.
+```math
+v(\bm G) = \sqrt{\frac{4π}{\bm G^2}}
+```
+
+# Arguments
+- `scfres`: the self-consistent field solution from DFTK
+- `n_bands`: number of bands to be considered
+
 """
-function compute_coulomb_vertex(scfres::NamedTuple)
+function compute_coulomb_vertex(scfres::NamedTuple; n_bands=scfres.n_bands_converge)
     basis = scfres.basis
-    n_bands = scfres.n_bands_converge
     nk = length(basis.kpoints) 
 
     # === set up callback ===
@@ -115,9 +124,12 @@ abstract type ΓCompressionStrategy end
 
 
 @doc raw"""
-    compress_coulomb_vertex(ΓmnG; thresh=1e-6, 
+    compress_coulomb_vertex(ΓmnG::AbstractArray{T,5}; thresh=1e-6, compression_strategy::ΓCompressionStrategy=AdaptiveRandomizedSVD())
 
-TODO
+# Arguments
+- `ΓmnG`: the Coulomb vertex
+- `thresh`: eigenvalues of Coulomb Gramian to be considered in Hartree
+- `compression_strategy`: compression strategy, see [`ΓCompressionStrategy`](@ref)
 
 """
 function compress_coulomb_vertex(
@@ -132,7 +144,13 @@ end
 @doc raw"""
     CoulombGramian <: ΓCompressionStrategy
 
-AdaptiveRandomizedSVD
+This strategy compresses the Coulomb vertex $\Gamma_{mn}^{G}$ through the largest
+eigenvalues of the Coulomb Gramian
+```math
+H = - \Gamma^\dagger \Gamma = U \Lambda U^\dagger
+```    
+The compressed $\Gamma$ is then obtained via $\Gamma_\text{compressed} = \Gamma U$,
+where the rows of $U$ are restricted such that $\lambda >$ `thresh`.
 """
 struct CoulombGramian <: ΓCompressionStrategy end
 function _compress_coulomb_vertex(
@@ -143,8 +161,8 @@ function _compress_coulomb_vertex(
     Γmat = reshape(ΓmnG, prod(size(ΓmnG)[1:4]), size(ΓmnG, 5))
     Npp, NG = size(Γmat)
 
-    E_GG = -Hermitian(Γmat' * Γmat)         # Gramian in full PW basis
-    λ, U = eigen(E_GG)                      # diagonalize
+    H = -Hermitian(Γmat' * Γmat)         # Gramian in full PW basis
+    λ, U = eigen(H)                      # diagonalize
     NF = findlast(s -> abs(s) > thresh, λ)  # truncate based on thresh
     if isnothing(NF)
         ΓmnG
@@ -158,9 +176,9 @@ end
 @doc raw"""
     AdaptiveRandomizedSVD <: ΓCompressionStrategy
 
-Compressing the Coulomb vertex $\Gamma_{mn}^{G}$ through an adaptive randomized SVD.
+This strategy compresses the Coulomb vertex $\Gamma_{mn}^{G}$ via an adaptive randomized SVD.
 
-This algorithm approximates the range of the row space of $\Gamma$ (the orbital indices
+The algorithm approximates the range of the row space of $\Gamma$ (the orbital indices
 are considered as superindex) through a thin basis Q, such that
 ```math
 \Gamma \approx \Gamma Q Q^\dagger
@@ -168,7 +186,7 @@ are considered as superindex) through a thin basis Q, such that
 where $\Gamma$ is a $N_{pp} \times N_G$ and $Q$ a $N_G \times N_F$ matrix.
 This is done through a stochastic Q and a diagonalization of
 ```math
-E = -\tilde \Gamma^\dagger \tilde \Gamma = U D U^\dagger
+H = -\tilde \Gamma^\dagger \tilde \Gamma = U \Lambda U^\dagger
 ```    
 where $\tilde \Gamma = \Gamma Q$. 
 The compressed $\Gamma$ is then obtained via $\Gamma_\text{compressed} = \tilde \Gamma U$.
@@ -231,8 +249,8 @@ function _compress_coulomb_vertex(
 
     # === Compression Step ===
     Γ_proj = Γmat * Q                       # Project Γ onto Q 
-    E_GG = -Hermitian(Γ_proj' * Γ_proj)     # Gramian in Q basis
-    λ, U = eigen(E_GG)                      # diagonalize
+    H = -Hermitian(Γ_proj' * Γ_proj)     # Gramian in Q basis
+    λ, U = eigen(H)                      # diagonalize
     NF = findlast(s -> abs(s) > thresh, λ)  # truncate based on thresh
     if isnothing(NF)
         ΓmnG
