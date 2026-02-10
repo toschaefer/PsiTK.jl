@@ -1,4 +1,8 @@
-# <img align="right" src="docs/src/assets/PsiTK+name.png" height="45" alt="PsiTK Logo"> PsiTK: The Wavefunction Toolkit
+<p align="left">
+  <img src="docs/src/assets/PsiTK+name.png" height="80" alt="PsiTK Logo">
+</p>
+
+# PsiTK: The Wavefunction Toolkit
 
 
 [![Docs](https://img.shields.io/badge/docs-dev-blue.svg)](https://toschaefer.github.io/PsiTK.jl/dev)
@@ -6,8 +10,7 @@
 [![Status](https://img.shields.io/badge/Status-pre_alpha-red)](https://github.com/toschaefer/PsiTK.jl)
 
 
-
-**PsiTK** is a lightweight framework for developing correlated wavefunction workflows in the plane wave basis.
+ **PsiTK** is a lightweight framework for developing correlated wavefunction workflows in the plane wave basis.
 
 
 Enabling post-Hartree–Fock and beyond-DFT methods for 3D models under periodic boundary conditions, PsiTK acts as the wavefunction couterpart of the [density-functional toolkit (DFTK.jl)](https://github.com/JuliaMolSim/DFTK.jl) and provides an interface to the massively parallel coupled cluster solver [Cc4s](https://gitlab.cc4s.org/cc4s/cc4s).
@@ -24,6 +27,8 @@ PsiTK is currently under active development. Here's our planned trajectory:
 - [ ] GPU acceleration / MPI parallelization
 
 We welcome input on priorities. Open an issue to discuss.
+
+
 
 
 ## Motivation
