@@ -19,11 +19,10 @@ PsiTK is currently under active development. Here's our planned trajectory:
 
 - [x] Resolution-of-identity decomposition (density fitting) of the electron repulsion integrals
 - [x] [Cc4s](https://gitlab.cc4s.org/cc4s/cc4s) interface for coupled cluster calculations
+- [ ] Natural orbitals (virtual space compression schemes)
+- [ ] Spin-polarization support
 - [ ] Test suite
 - [ ] Documentation with examples
-- [ ] Natural orbitals
-- [ ] MP2 and RPA
-- [ ] spin-polarization
 - [ ] GPU acceleration / MPI parallelization
 
 We welcome input on priorities. Open an issue to discuss.
