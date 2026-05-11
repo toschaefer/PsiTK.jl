@@ -18,7 +18,11 @@ v(\bm G) = \sqrt{\frac{4π}{\bm G^2}}
 - `n_bands`: number of bands to be considered
 
 """
-function compute_coulomb_vertex(scfres::NamedTuple; n_bands=scfres.n_bands_converge)
+function compute_coulomb_vertex(
+    scfres::NamedTuple;
+    interaction_kernel=DFTK.Coulomb(DFTK.ProbeCharge()),
+    n_bands=scfres.n_bands_converge
+)
     basis = scfres.basis
     nk = length(basis.kpoints) 
 
@@ -27,12 +31,13 @@ function compute_coulomb_vertex(scfres::NamedTuple; n_bands=scfres.n_bands_conve
     callback = make_coulomb_vertex_callback(total_steps)
 
     # === compute Coulomb Vertex ===
-    _compute_coulomb_vertex(basis, scfres.ψ; n_bands, callback)
+    _compute_coulomb_vertex(basis, interaction_kernel, scfres.ψ; n_bands, callback)
 end
 
 # This function initially based on code of the experimental "cc4s" branch in DFTK written by Michael Herbst
 function _compute_coulomb_vertex(
     basis,
+    interaction_kernel,
     ψ::AbstractVector{<:AbstractArray{T}};
     n_bands=size(ψ[1], 2),
     callback=nothing
@@ -63,7 +68,7 @@ function _compute_coulomb_vertex(
         for (ikm, kptm) in enumerate(basis.kpoints)
             # Compute momentum transfer q and Coulomb kernel
             q = kptn.coordinate - kptm.coordinate
-            kernel_sqrt = sqrt.(DFTK.compute_coulomb_kernel(basis; q))
+            kernel_sqrt = sqrt.(DFTK.compute_kernel_fourier(interaction_kernel, basis; q))
 
             for m in 1:n_bands
                 # Compute upper triangle only (m <= n)
