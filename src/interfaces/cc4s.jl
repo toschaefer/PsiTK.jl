@@ -121,7 +121,8 @@ function dump_cc4s_files(
     folder::AbstractString=joinpath(pwd(), "cc4s");
     force=false, 
     auxfield_thresh=1e-6, 
-    Ecut_ratio=2/3
+    Ecut_ratio=2/3,
+    coulomb_vertex_compression=AdaptiveRandomizedSVD()
 )
     mkpath(folder)
     n_bands=scfres.n_bands_converge
@@ -154,7 +155,7 @@ function dump_cc4s_files(
     @time Γcompress = compress_coulomb_vertex(
         ΓmnG_reduced; 
         thresh=auxfield_thresh,
-        compression_strategy=AdaptiveRandomizedSVD()
+        compression_strategy=coulomb_vertex_compression
     )
     files_coul = write_coulomb_vertex(folder, Γcompress; force)
 

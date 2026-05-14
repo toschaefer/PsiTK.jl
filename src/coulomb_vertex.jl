@@ -236,13 +236,19 @@ function _compress_coulomb_vertex(
     
     # Iterate until convergence
     while current_error > target_error && size(Q, 2) < NG
+        current_block_size = min(column_block_size, NG - size(Q, 2))
         Ω = randn(T, Npp, column_block_size) # D@doc raw a new random block
         Y_block = Γmat' * Ω                  # Project Γ onto Ω
         
-        # Orthogonalize Y_block against existing Q (Gram-Schmidt)
+        # Orthogonalize Y_block against existing Q: we do iterated Gram-Schmidt 
+        # to preserve orthogonality (assuming "twice is enough" rule)
         if size(Q, 2) > 0
-            coeffs = Q' * Y_block
-            Y_block .-= Q * coeffs
+            # first pass
+            coeffs1 = Q' * Y_block
+            Y_block .-= Q * coeffs1
+            # second pass
+            coeffs2 = Q' * Y_block
+            Y_block .-= Q * coeffs2
         end
         
         Q_block = Matrix(qr(Y_block).Q) # Orthonormalize block itself (QR)
