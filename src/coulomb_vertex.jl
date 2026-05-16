@@ -237,8 +237,8 @@ function _compress_coulomb_vertex(
     # Iterate until convergence
     while current_error > target_error && size(Q, 2) < NG
         current_block_size = min(column_block_size, NG - size(Q, 2))
-        Ω = randn(T, Npp, column_block_size) # D@doc raw a new random block
-        Y_block = Γmat' * Ω                  # Project Γ onto Ω
+        Ω = randn(T, Npp, current_block_size) # Draw a new random block
+        Y_block = Γmat' * Ω                   # Project Γ onto Ω
         
         # Orthogonalize Y_block against existing Q: we do iterated Gram-Schmidt 
         # to preserve orthogonality (assuming "twice is enough" rule)
@@ -254,17 +254,17 @@ function _compress_coulomb_vertex(
         Q_block = Matrix(qr(Y_block).Q) # Orthonormalize block itself (QR)
         Q = hcat(Q, Q_block)            # Update stochastic basis Q
         
-        # current_error = || Γ' * ω - Q * (Q' * Γ' * ω) || / ||ω||
+        # current_error = || Γ' * ω - Q * (Q' * Γ' * ω) || 
         proj_ω = Γmat' * ω
         coeffs_ω = Q' * proj_ω
         rem_ω = proj_ω - Q * coeffs_ω
-        current_error = norm(rem_ω) / ω_norm
+        current_error = norm(rem_ω) 
     end
 
     # === Compression Step ===
     Γ_proj = Γmat * Q                       # Project Γ onto Q 
-    H = -Hermitian(Γ_proj' * Γ_proj)     # Gramian in Q basis
-    λ, U = eigen(H)                      # diagonalize
+    H = -Hermitian(Γ_proj' * Γ_proj)        # Gramian in Q basis
+    λ, U = eigen(H)                         # diagonalize
     NF = findlast(s -> abs(s) > thresh, λ)  # truncate based on thresh
     if isnothing(NF)
         ΓmnG
