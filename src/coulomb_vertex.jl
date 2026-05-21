@@ -203,7 +203,7 @@ The dimension $N_F$ is found by a preceding adaptive range finder.
 This finder iteratively increases the columns of Q (i.e. $N_F$) in steps of $\sqrt{N_{pp}}$ 
 and stops when the error for a stochastic test vector $\omega$
 ```math
-\varepsilon = \frac{ \Vert (1 - QQ^\dagger)\Gamma^\dagger \omega \Vert}{\Vert \omega \Vert}
+\varepsilon =  \Vert (1 - QQ^\dagger)\Gamma^\dagger \omega \Vert
 ```
 is smaller than thresh/10.
 """
@@ -218,51 +218,63 @@ function _compress_coulomb_vertex(
     
     # === Adaptive Range Finder for NF ===
     
-    # Matrix for the stochastic guess basis (intially empty)
-    Q = Matrix{T}(undef, NG, 0) 
-
-    # Step size for increasing the basis = (√Npp)/10
-    column_block_size = round(Int, Npp^0.5)  
+    # Store blocks of the stochastic guess basis
+    Q_blocks = Matrix{T}[]
+    
+    # Step size for increasing the basis = 2*(√Npp)
+    column_block_size = round(Int, 2*Npp^0.5)  
     
     # Stochastic test vector for error estimation
     ω = randn(T, Npp) 
-    ω_norm = norm(ω)
     
     # target error a little smaller than √thresh
-    target_error = sqrt(thresh)/10
+    target_error = sqrt(thresh)/2
 
     # set current error initially larger than stop criterion 
     current_error = 2 * target_error
     
+    # Precompute projection of the test vector onto Γ
+    proj_ω = Γmat' * ω
+    rem_ω = copy(proj_ω)
+
+    current_cols = 0
+    
     # Iterate until convergence
-    while current_error > target_error && size(Q, 2) < NG
-        current_block_size = min(column_block_size, NG - size(Q, 2))
+    while current_error > target_error && current_cols < NG
+        current_block_size = min(column_block_size, NG - current_cols)
         Ω = randn(T, Npp, current_block_size) # Draw a new random block
         Y_block = Γmat' * Ω                   # Project Γ onto Ω
         
         # Orthogonalize Y_block against existing Q: we do iterated Gram-Schmidt 
         # to preserve orthogonality (assuming "twice is enough" rule)
-        if size(Q, 2) > 0
+        if !isempty(Q_blocks)
             # first pass
-            coeffs1 = Q' * Y_block
-            Y_block .-= Q * coeffs1
+            for Qb in Q_blocks
+                coeffs1 = Qb' * Y_block
+                Y_block .-= Qb * coeffs1
+            end
             # second pass
-            coeffs2 = Q' * Y_block
-            Y_block .-= Q * coeffs2
+            for Qb in Q_blocks
+                coeffs2 = Qb' * Y_block
+                Y_block .-= Qb * coeffs2
+            end
         end
         
         Q_block = Matrix(qr(Y_block).Q) # Orthonormalize block itself (QR)
-        Q = hcat(Q, Q_block)            # Update stochastic basis Q
+        push!(Q_blocks, Q_block)        # Update stochastic basis blocks
+        current_cols += current_block_size
         
-        # current_error = || Γ' * ω - Q * (Q' * Γ' * ω) || 
-        proj_ω = Γmat' * ω
-        coeffs_ω = Q' * proj_ω
-        rem_ω = proj_ω - Q * coeffs_ω
+        # Update current_error incrementally
+        coeffs_ω = Q_block' * rem_ω
+        rem_ω .-= Q_block * coeffs_ω
         current_error = norm(rem_ω) 
     end
 
+    # Combine blocks to form the full basis
+    Q = reduce(hcat, Q_blocks)
+
     # === Compression Step ===
-    Γ_proj = Γmat * Q                       # Project Γ onto Q 
+    Γ_proj = Γmat * Q                       # Project Γ onto Q
     H = -Hermitian(Γ_proj' * Γ_proj)        # Gramian in Q basis
     λ, U = eigen(H)                         # diagonalize
     NF = findlast(s -> abs(s) > thresh, λ)  # truncate based on thresh
