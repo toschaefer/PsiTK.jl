@@ -1,6 +1,5 @@
 export OrbitalSpace
-export AbstractOrbitalAlgorithm
-export AbstractOrbitalSelector, AbstractOrbitalGenerator, AbstractOrbitalTransformer
+
 
 """
     OrbitalSpace{B, T, R <: Real}
@@ -38,8 +37,4 @@ function OrbitalSpace(scfres)
     )
 end
 
-# Algorithm Traits
-abstract type AbstractOrbitalAlgorithm end
-abstract type AbstractOrbitalSelector <: AbstractOrbitalAlgorithm end
-abstract type AbstractOrbitalGenerator <: AbstractOrbitalAlgorithm end
-abstract type AbstractOrbitalTransformer <: AbstractOrbitalAlgorithm end
+

@@ -7,7 +7,7 @@ export select_orbitals
 Algorithm to select the occupied subspace from an `OrbitalSpace` based on a given
 fractional occupation threshold.
 """
-Base.@kwdef struct OccupiedOrbitals <: AbstractOrbitalSelector
+Base.@kwdef struct OccupiedOrbitals
     threshold::Float64 = 1e-6
 end
 

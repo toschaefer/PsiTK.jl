@@ -23,7 +23,7 @@ end
 Algorithm to compute compressed virtual orbitals (Downfolded Singular Vectors)
 by diagonalizing the exact exchange operator in the full virtual space.
 """
-Base.@kwdef struct DownfoldDSV <: AbstractOrbitalGenerator
+Base.@kwdef struct DownfoldDSV
     n_orbitals::Int = 100
     tol::Float64 = 1e-5
     maxiter::Int = 500
@@ -35,7 +35,7 @@ end
 Algorithm to compute canonical virtual orbitals by diagonalizing the Fock
 Hamiltonian. Set `n_orbitals = :all` to compute the full virtual plane-wave space.
 """
-Base.@kwdef struct CanonicalVirtuals <: AbstractOrbitalGenerator
+Base.@kwdef struct CanonicalVirtuals
     n_orbitals::Union{Int, Symbol} = 100
 end
 
