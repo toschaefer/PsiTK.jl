@@ -9,4 +9,13 @@ This encompasses a range of functions, including the definition and compression 
 
 Furthermore, PsiTK natively includes algorithms for MP2 and RPA calculations.
 
+## Testing
 
+To run the full test suite, enter the Julia package manager (`]`) and run:
+```julia
+pkg> test
+```
+To filter and run specific test items, pass the corresponding tags as test arguments:
+```bash
+julia --project -e 'using Pkg; Pkg.test(test_args=["coulomb_vertex"])'
+```
