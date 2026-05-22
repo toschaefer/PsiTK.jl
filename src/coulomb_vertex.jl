@@ -1,7 +1,7 @@
 @doc raw"""
     compute_coulomb_vertex(
-        scfres::NamedTuple;
-        n_bands=scfres.n_bands_converge
+        active_space::OrbitalSpace;
+        n_bands=size(active_space.ψ[1], 2)
     )
 
 Compute the Coulomb vertex
@@ -14,16 +14,18 @@ v(\bm G) = \sqrt{\frac{4π}{\bm G^2}}
 ```
 
 # Arguments
-- `scfres`: the self-consistent field solution from DFTK
+- `active_space`: the active orbital space 
 - `n_bands`: number of bands to be considered
 
 """
 function compute_coulomb_vertex(
-    scfres::NamedTuple;
+    active_space::OrbitalSpace;
     interaction_kernel=DFTK.Coulomb(DFTK.ProbeCharge()),
-    n_bands=scfres.n_bands_converge
+    n_bands=size(active_space.ψ[1], 2),
+    compression=nothing,
+    Ecut_ratio=2/3
 )
-    basis = scfres.basis
+    basis = active_space.basis
     nk = length(basis.kpoints) 
 
     # === set up callback ===
@@ -31,7 +33,34 @@ function compute_coulomb_vertex(
     callback = make_coulomb_vertex_callback(total_steps)
 
     # === compute Coulomb Vertex ===
-    _compute_coulomb_vertex(basis, interaction_kernel, scfres.ψ; n_bands, callback)
+    ΓmnG = _compute_coulomb_vertex(basis, interaction_kernel, active_space.ψ; n_bands, callback)
+    
+    # === Filter G vectors (Ecut_ratio) ===
+    if Ecut_ratio !== nothing
+        # reduce the plane wave cutoff
+        # this only works for Gamma-only now
+        Ecut_reduced = basis.Ecut * Ecut_ratio
+        kpt = basis.kpoints[1]
+        model = basis.model
+        G_mask = [
+            sum(abs2, model.recip_lattice * G) / 2 <= Ecut_reduced
+            for G in kpt.G_vectors
+        ]
+        G_indices = findall(G_mask)
+        nG_reduced = length(G_indices)
+        nk1, nb1, nk2, nb2, nG = size(ΓmnG)
+        ΓmnG_reduced = zeros(eltype(ΓmnG), nk1, nb1, nk2, nb2, nG_reduced)
+        ΓmnG_reduced[:,:,:,:,:] = ΓmnG[:,:,:,:,G_indices]
+        ΓmnG = ΓmnG_reduced
+    end
+
+    if !isnothing(compression)
+        # Note: We hardcode a thresh parameter here, but normally it should be part of the algorithm struct.
+        # Assuming the caller wraps the threshold in the algorithm struct in the future.
+        return compress_coulomb_vertex(ΓmnG; compression_strategy=compression)
+    end
+    
+    return ΓmnG
 end
 
 # This function initially based on code of the experimental "cc4s" branch in DFTK written by Michael Herbst
@@ -142,10 +171,9 @@ abstract type ΓCompressionStrategy end
 """
 function compress_coulomb_vertex(
     ΓmnG::AbstractArray{T,5}; 
-    thresh=1e-6, # in Hartree
     compression_strategy::ΓCompressionStrategy=AdaptiveRandomizedSVD()
 ) where {T}
-    _compress_coulomb_vertex(ΓmnG, thresh, compression_strategy)
+    _compress_coulomb_vertex(ΓmnG, compression_strategy)
 end
 
 
@@ -160,12 +188,14 @@ H = - \Gamma^\dagger \Gamma = U \Lambda U^\dagger
 The compressed $\Gamma$ is then obtained via $\Gamma_\text{compressed} = \Gamma U$,
 where the columns of $U$ are restricted such that $\lambda >$ `thresh`.
 """
-struct CoulombGramian <: ΓCompressionStrategy end
+Base.@kwdef struct CoulombGramian <: ΓCompressionStrategy 
+    thresh::Float64 = 1e-6
+end
 function _compress_coulomb_vertex(
     ΓmnG::AbstractArray{T,5},
-    thresh, # in Hartree
-    ::CoulombGramian
+    strategy::CoulombGramian
 ) where {T}
+    thresh = strategy.thresh
     Γmat = reshape(ΓmnG, prod(size(ΓmnG)[1:4]), size(ΓmnG, 5))
     Npp, NG = size(Γmat)
 
@@ -207,12 +237,14 @@ and stops when the error for a stochastic test vector $\omega$
 ```
 is smaller than thresh/10.
 """
-struct AdaptiveRandomizedSVD <: ΓCompressionStrategy end
+Base.@kwdef struct AdaptiveRandomizedSVD <: ΓCompressionStrategy 
+    thresh::Float64 = 1e-6
+end
 function _compress_coulomb_vertex(
     ΓmnG::AbstractArray{T,5},
-    thresh, # in Hartree
-    ::AdaptiveRandomizedSVD
+    strategy::AdaptiveRandomizedSVD
 ) where {T}
+    thresh = strategy.thresh
     Γmat = reshape(ΓmnG, prod(size(ΓmnG)[1:4]), size(ΓmnG, 5))
     Npp, NG = size(Γmat)
     

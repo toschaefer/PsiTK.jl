@@ -2,8 +2,9 @@
     using LinearAlgebra
     
     scfres = TestSystems.setup_water_hf()
+    space = OrbitalSpace(scfres)
     
-    ΓmnG = compute_coulomb_vertex(scfres)
+    ΓmnG = compute_coulomb_vertex(space; n_bands=scfres.n_bands_converge)
     
     # Check dimensions
     nkpt = length(scfres.basis.kpoints)

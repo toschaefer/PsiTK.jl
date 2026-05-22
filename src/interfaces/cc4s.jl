@@ -98,11 +98,10 @@ end
 
 """
     dump_cc4s_files(
-        scfres::NamedTuple,
+        active_space::OrbitalSpace,
+        ΓmnG::AbstractArray,
         folder::AbstractString=joinpath(pwd(), "cc4s");
-        force=false, 
-        auxfield_thresh=1e-6, 
-        Ecut_ratio=2/3
+        force=false
     )
 
 Write Cc4s input files (*.yaml and *.elements):
@@ -110,55 +109,29 @@ Write Cc4s input files (*.yaml and *.elements):
 - CoulombVertex
 
 # Arguments
-- `scfres`: the SCF result from DFTK
+- `active_space`: the `OrbitalSpace` containing the bands (occupations and eigenvalues)
+- `ΓmnG`: the (compressed) Coulomb vertex
 - `folder`: the target folder
 - `force`: if true existing files will be overwritten
-- `auxfield_thresh`: threshold (in Hartree) for the compression of the Coulomb vertex
-- `Ecut_ratio`: factor to reduce the plane wave cutoff 
 """
 function dump_cc4s_files(
-    scfres::NamedTuple,
+    active_space::OrbitalSpace,
+    ΓmnG::AbstractArray,
     folder::AbstractString=joinpath(pwd(), "cc4s");
-    force=false, 
-    auxfield_thresh=1e-6, 
-    Ecut_ratio=2/3,
-    coulomb_vertex_compression=AdaptiveRandomizedSVD()
+    force=false
 )
     mkpath(folder)
-    n_bands=scfres.n_bands_converge
 
-    # === Eigenvalues ===
-    eigenvalues = map(εk -> εk[1:n_bands], scfres.eigenvalues)
-    files_ene = write_eigenenergies(folder, eigenvalues, scfres.εF; force)
+    # --- dump Eigenvalues
+    # For cc4s we just pass the eigenvalues from the active space
+    # (Assuming 1 kpoint for now)
+    eigenvalues = active_space.eigenvalues
+    εF = active_space.εF  # Fermi level
+    
+    files_ene = write_eigenenergies(folder, eigenvalues, εF; force)
 
-    # === Coulomb Vertex ===
-    @time ΓmnG = compute_coulomb_vertex(scfres)
-
-    # === Filter G vectors ===
-    # reduce the plane wave cutoff
-    # this only works for Gamma-only now
-    Ecut_reduced = scfres.basis.Ecut * Ecut_ratio
-    basis = scfres.basis
-    kpt = basis.kpoints[1]
-    model = basis.model
-    G_mask = [
-        sum(abs2, model.recip_lattice * G) / 2 <= Ecut_reduced
-        for G in kpt.G_vectors
-    ]
-    G_indices = findall(G_mask)
-    nG_reduced = length(G_indices)
-    nk1, nb1, nk2, nb2, nG = size(ΓmnG)
-    ΓmnG_reduced = zeros(eltype(ΓmnG), nk1, nb1, nk2, nb2, nG_reduced)
-    ΓmnG_reduced[:,:,:,:,:] = ΓmnG[:,:,:,:,G_indices]
-
-    # === Compress Coulomb Vertex ===
-    @time Γcompress = compress_coulomb_vertex(
-        ΓmnG_reduced; 
-        thresh=auxfield_thresh,
-        compression_strategy=coulomb_vertex_compression
-    )
-    files_coul = write_coulomb_vertex(folder, Γcompress; force)
+    # --- dump Coulomb Vertex
+    files_coul = write_coulomb_vertex(folder, ΓmnG; force)
 
     append!(files_ene, files_coul)
 end
-
