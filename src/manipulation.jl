@@ -2,14 +2,11 @@ export merge_spaces
 export canonicalize_orbitals
 
 using LinearAlgebra
-using BlockArrays
 
 """
     merge_spaces(spaces::OrbitalSpace...)
 
-Merges multiple `OrbitalSpace`s into a single `OrbitalSpace`. To avoid massive
-memory allocations, this uses `BlockArrays` to construct lazy views of the
-wavefunctions (`ψ`).
+Merges multiple `OrbitalSpace`s into a single `OrbitalSpace`.
 """
 function merge_spaces(spaces::OrbitalSpace{B, T, R}...) where {B, T, R}
     @assert length(spaces) > 0 "Must provide at least one OrbitalSpace to merge."
@@ -17,15 +14,14 @@ function merge_spaces(spaces::OrbitalSpace{B, T, R}...) where {B, T, R}
     basis = spaces[1].basis
     nkpt = length(basis.kpoints)
     
-    ψ_merged = AbstractMatrix{T}[]
+    ψ_merged = Matrix{T}[]
     eigenvalues_merged = Vector{R}[]
     occupations_merged = Vector{R}[]
 
     for ik in 1:nkpt
-        # Lazy horizontal concatenation of wavefunctions
+        # Standard horizontal concatenation of wavefunctions
         ψ_k_blocks = [s.ψ[ik] for s in spaces]
-        # Use BlockArrays for a zero-allocation view
-        push!(ψ_merged, mortar(reshape(ψ_k_blocks, 1, length(ψ_k_blocks))))
+        push!(ψ_merged, reduce(hcat, ψ_k_blocks))
         
         # Standard concatenation for 1D scalar arrays (negligible memory)
         push!(eigenvalues_merged, vcat([s.eigenvalues[ik] for s in spaces]...))
@@ -48,7 +44,7 @@ Diagonalizes the Fock Hamiltonian in the subspace defined by `space.ψ` to
 return canonicalized, orthogonal eigenstates.
 """
 function canonicalize_orbitals(space::OrbitalSpace{B, T, R}, hamiltonian) where {B, T, R}
-    ψ_canon = AbstractMatrix{T}[]
+    ψ_canon = Matrix{T}[]
     eigenvalues_canon = Vector{R}[]
     
     for ik in 1:length(space.basis.kpoints)

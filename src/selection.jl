@@ -17,7 +17,7 @@ end
 Extracts the occupied orbitals from the given `space` where occupation > `alg.threshold`.
 """
 function select_orbitals(space::OrbitalSpace{B, T, R}, alg::OccupiedOrbitals) where {B, T, R}
-    ψ_occ = AbstractMatrix{T}[]
+    ψ_occ = Matrix{T}[]
     eigenvalues_occ = Vector{R}[]
     occupations_occ = Vector{R}[]
 

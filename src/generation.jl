@@ -52,7 +52,7 @@ function generate_orbitals(alg::DownfoldDSV, scfres, occ_space::OrbitalSpace{B, 
     ExactExchangeTerm = only([term for term in basis.terms if term isa DFTK.TermExactExchange])
     _, K = DFTK.ene_ops(ExactExchangeTerm, basis, scfres.ψ, scfres.occupation)
     
-    ψ_dsv = AbstractMatrix{T}[]
+    ψ_dsv = Matrix{T}[]
     eigenvalues_dsv = Vector{R}[]
     occupations_dsv = Vector{R}[]
 
@@ -103,7 +103,7 @@ function generate_orbitals(alg::CanonicalVirtuals, scfres, occ_space::OrbitalSpa
     basis = scfres.basis
     Ecut = basis.Ecut
     
-    ψ_virt = AbstractMatrix{T}[]
+    ψ_virt = Matrix{T}[]
     eigenvalues_virt = Vector{R}[]
     occupations_virt = Vector{R}[]
 
