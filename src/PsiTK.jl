@@ -15,6 +15,7 @@ include("selection.jl")
 include("generation.jl")
 include("manipulation.jl")
 export compute_coulomb_vertex
+export compress_coulomb_vertex
 export AdaptiveRandomizedSVD
 export CoulombGramian
 include("coulomb_vertex.jl")

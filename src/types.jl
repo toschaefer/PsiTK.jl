@@ -14,7 +14,7 @@ from stateful host objects like DFTK's `scfres`.
 - `occupations::Vector{Vector{R}}`: The fractional occupations per k-point.
 - `εF::R`: The Fermi energy of the system.
 """
-struct OrbitalSpace{B, T, R <: Real}
+struct OrbitalSpace{B,T,R<:Real}
     basis::B
     ψ::Vector{Matrix{T}}
     eigenvalues::Vector{Vector{R}}
@@ -27,14 +27,12 @@ function OrbitalSpace(scfres)
     B = typeof(scfres.basis)
     T = eltype(scfres.ψ[1])
     R = eltype(scfres.eigenvalues[1])
-    
-    return OrbitalSpace{B, T, R}(
+
+    return OrbitalSpace{B,T,R}(
         scfres.basis,
         scfres.ψ,
         scfres.eigenvalues,
         scfres.occupation,
-        scfres.εF
+        scfres.εF,
     )
 end
-
-

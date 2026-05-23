@@ -20,21 +20,27 @@ v(\bm G) = \sqrt{\frac{4π}{\bm G^2}}
 """
 function compute_coulomb_vertex(
     active_space::OrbitalSpace;
-    interaction_kernel=DFTK.Coulomb(DFTK.ProbeCharge()),
-    n_bands=size(active_space.ψ[1], 2),
-    compression=nothing,
-    Ecut_ratio=2/3
+    interaction_kernel = DFTK.Coulomb(DFTK.ProbeCharge()),
+    n_bands = size(active_space.ψ[1], 2),
+    compression = nothing,
+    Ecut_ratio = 2/3,
 )
     basis = active_space.basis
-    nk = length(basis.kpoints) 
+    nk = length(basis.kpoints)
 
     # === set up callback ===
     total_steps = (n_bands*(n_bands+1)÷2)*nk^2 # only upper triangle of ΓmnG
     callback = make_coulomb_vertex_callback(total_steps)
 
     # === compute Coulomb Vertex ===
-    ΓmnG = _compute_coulomb_vertex(basis, interaction_kernel, active_space.ψ; n_bands, callback)
-    
+    ΓmnG = _compute_coulomb_vertex(
+        basis,
+        interaction_kernel,
+        active_space.ψ;
+        n_bands,
+        callback,
+    )
+
     # === Filter G vectors (Ecut_ratio) ===
     if Ecut_ratio !== nothing
         # reduce the plane wave cutoff
@@ -42,22 +48,20 @@ function compute_coulomb_vertex(
         Ecut_reduced = basis.Ecut * Ecut_ratio
         kpt = basis.kpoints[1]
         model = basis.model
-        G_mask = [
-            sum(abs2, model.recip_lattice * G) / 2 <= Ecut_reduced
-            for G in kpt.G_vectors
-        ]
+        G_mask =
+            [sum(abs2, model.recip_lattice * G) / 2 <= Ecut_reduced for G in kpt.G_vectors]
         G_indices = findall(G_mask)
         nG_reduced = length(G_indices)
         nk1, nb1, nk2, nb2, nG = size(ΓmnG)
         ΓmnG_reduced = zeros(eltype(ΓmnG), nk1, nb1, nk2, nb2, nG_reduced)
-        ΓmnG_reduced[:,:,:,:,:] = ΓmnG[:,:,:,:,G_indices]
+        ΓmnG_reduced[:, :, :, :, :] = ΓmnG[:, :, :, :, G_indices]
         ΓmnG = ΓmnG_reduced
     end
 
     if !isnothing(compression)
         return compress_coulomb_vertex(ΓmnG, compression)
     end
-    
+
     ΓmnG
 end
 
@@ -66,20 +70,20 @@ function _compute_coulomb_vertex(
     basis,
     interaction_kernel,
     ψ::AbstractVector{<:AbstractArray{T}};
-    n_bands=size(ψ[1], 2),
-    callback=nothing
+    n_bands = size(ψ[1], 2),
+    callback = nothing,
 ) where {T}
-    kpt   = basis.kpoints[1]
-    n_G   = length(G_vectors(basis, kpt))
+    kpt = basis.kpoints[1]
+    n_G = length(G_vectors(basis, kpt))
     n_kpt = length(basis.kpoints)
 
     # === Create index to map G to -G ===
-    Gs  = G_vectors(basis, kpt)
-    G_to_idx    = Dict(Gs[i] => i for i in 1:n_G)
-    idx_minus_G = [G_to_idx[-Gs[i]] for i in 1:n_G]
+    Gs = G_vectors(basis, kpt)
+    G_to_idx = Dict(Gs[i] => i for i = 1:n_G)
+    idx_minus_G = [G_to_idx[-Gs[i]] for i = 1:n_G]
 
     # allocate coulomb vertex
-    ΓmnG  = zeros(complex(T), n_kpt, n_bands, n_kpt, n_bands, n_G)
+    ΓmnG = zeros(complex(T), n_kpt, n_bands, n_kpt, n_bands, n_G)
 
     # TODO:
     # Idea is to make some outer loop over the m-slices
@@ -97,10 +101,12 @@ function _compute_coulomb_vertex(
             q = kptn.coordinate - kptm.coordinate
             kernel_sqrt = sqrt.(DFTK.compute_kernel_fourier(interaction_kernel, basis; q))
 
-            for m in 1:n_bands
+            for m = 1:n_bands
                 # Compute upper triangle only (m <= n)
                 # The lower triangle is filled via Hermitian conjugation below.
-                if m > n continue end 
+                if m > n
+                    continue
+                end
 
                 # Prepare ψmk(r) 
                 # TODO: pre-calculate some of them (not all because virtual space can be large)
@@ -116,16 +122,17 @@ function _compute_coulomb_vertex(
                 if m != n
                     #value = ΓmnG[ikm, m, ikn, n, :]
                     #ΓmnG[ikn, n, ikm, m, :] .= conj.(@view value[idx_minus_G])
-                    ΓmnG[ikn, n, ikm, m, :] .= conj.(view(ΓmnG, ikm, m, ikn, n, idx_minus_G))
+                    ΓmnG[ikn, n, ikm, m, :] .=
+                        conj.(view(ΓmnG, ikm, m, ikn, n, idx_minus_G))
                 end
-                
+
                 # Callback
                 if !isnothing(callback)
                     callback()
                 end
-            end  
-        end 
-    end  
+            end
+        end
+    end
     ΓmnG
 end
 
@@ -144,12 +151,12 @@ H = - \Gamma^\dagger \Gamma = U \Lambda U^\dagger
 The compressed $\Gamma$ is then obtained via $\Gamma_\text{compressed} = \Gamma U$,
 where the columns of $U$ are restricted such that $\lambda >$ `thresh`.
 """
-Base.@kwdef struct CoulombGramian 
+Base.@kwdef struct CoulombGramian
     thresh::Float64 = 1e-6
 end
 function compress_coulomb_vertex(
     ΓmnG::AbstractArray{T,5},
-    strategy::CoulombGramian
+    strategy::CoulombGramian,
 ) where {T}
     thresh = strategy.thresh
     Γmat = reshape(ΓmnG, prod(size(ΓmnG)[1:4]), size(ΓmnG, 5))
@@ -198,41 +205,41 @@ Base.@kwdef struct AdaptiveRandomizedSVD
 end
 function compress_coulomb_vertex(
     ΓmnG::AbstractArray{T,5},
-    strategy::AdaptiveRandomizedSVD
+    strategy::AdaptiveRandomizedSVD,
 ) where {T}
     thresh = strategy.thresh
     Γmat = reshape(ΓmnG, prod(size(ΓmnG)[1:4]), size(ΓmnG, 5))
     Npp, NG = size(Γmat)
-    
+
     # === Adaptive Range Finder for NF ===
-    
+
     # Store blocks of the stochastic guess basis
     Q_blocks = Matrix{T}[]
-    
+
     # Step size for increasing the basis = 2*(√Npp)
-    column_block_size = round(Int, 2*Npp^0.5)  
-    
+    column_block_size = round(Int, 2*Npp^0.5)
+
     # Stochastic test vector for error estimation
-    ω = randn(T, Npp) 
-    
+    ω = randn(T, Npp)
+
     # target error a little smaller than √thresh
     target_error = sqrt(thresh)/2
 
     # set current error initially larger than stop criterion 
     current_error = 2 * target_error
-    
+
     # Precompute projection of the test vector onto Γ
     proj_ω = Γmat' * ω
     rem_ω = copy(proj_ω)
 
     current_cols = 0
-    
+
     # Iterate until convergence
     while current_error > target_error && current_cols < NG
         current_block_size = min(column_block_size, NG - current_cols)
         Ω = randn(T, Npp, current_block_size) # Draw a new random block
         Y_block = Γmat' * Ω                   # Project Γ onto Ω
-        
+
         # Orthogonalize Y_block against existing Q: we do iterated Gram-Schmidt 
         # to preserve orthogonality (assuming "twice is enough" rule)
         if !isempty(Q_blocks)
@@ -247,15 +254,15 @@ function compress_coulomb_vertex(
                 Y_block .-= Qb * coeffs2
             end
         end
-        
+
         Q_block = Matrix(qr(Y_block).Q) # Orthonormalize block itself (QR)
         push!(Q_blocks, Q_block)        # Update stochastic basis blocks
         current_cols += current_block_size
-        
+
         # Update current_error incrementally
         coeffs_ω = Q_block' * rem_ω
         rem_ω .-= Q_block * coeffs_ω
-        current_error = norm(rem_ω) 
+        current_error = norm(rem_ω)
     end
 
     # Combine blocks to form the full basis
@@ -273,5 +280,3 @@ function compress_coulomb_vertex(
         reshape(ΓmnF, size(ΓmnG)[1:4]..., NF)
     end
 end
-
-
