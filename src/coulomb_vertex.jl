@@ -55,12 +55,10 @@ function compute_coulomb_vertex(
     end
 
     if !isnothing(compression)
-        # Note: We hardcode a thresh parameter here, but normally it should be part of the algorithm struct.
-        # Assuming the caller wraps the threshold in the algorithm struct in the future.
-        return compress_coulomb_vertex(ΓmnG; compression_strategy=compression)
+        return compress_coulomb_vertex(ΓmnG, compression)
     end
     
-    return ΓmnG
+    ΓmnG
 end
 
 # This function initially based on code of the experimental "cc4s" branch in DFTK written by Michael Herbst
@@ -131,54 +129,12 @@ function _compute_coulomb_vertex(
     ΓmnG
 end
 
-function make_coulomb_vertex_callback(total_steps)
-    p = Progress(
-        total_steps; 
-        desc="Computing Coulomb Vertex",
-        dt=0.5,
-        barlen=20,
-        barglyphs=BarGlyphs(' ', '━', '╸', '─', ' '),
-        color=:normal
-    )
-    return function()
-        next!(p)
-    end
-end
+
 
 
 
 @doc raw"""
-    ΓCompressionStrategy
-
-Abstract type for different strategies of compressing the 
-Coulomb vertex $\Gamma_{nm}^G$.
-
-Available models:
-- [`CoulombGramian`](@ref) 
-- [`AdaptiveRandomizedSVD`](@ref) (default)
-"""
-abstract type ΓCompressionStrategy end
-
-
-@doc raw"""
-    compress_coulomb_vertex(ΓmnG::AbstractArray{T,5}; thresh=1e-6, compression_strategy::ΓCompressionStrategy=AdaptiveRandomizedSVD())
-
-# Arguments
-- `ΓmnG`: the Coulomb vertex
-- `thresh`: eigenvalues of Coulomb Gramian to be considered in Hartree
-- `compression_strategy`: compression strategy, see [`ΓCompressionStrategy`](@ref)
-
-"""
-function compress_coulomb_vertex(
-    ΓmnG::AbstractArray{T,5}; 
-    compression_strategy::ΓCompressionStrategy=AdaptiveRandomizedSVD()
-) where {T}
-    _compress_coulomb_vertex(ΓmnG, compression_strategy)
-end
-
-
-@doc raw"""
-    CoulombGramian <: ΓCompressionStrategy
+    CoulombGramian
 
 This strategy compresses the Coulomb vertex $\Gamma_{mn}^{G}$ through the largest
 eigenvalues of the Coulomb Gramian
@@ -188,10 +144,10 @@ H = - \Gamma^\dagger \Gamma = U \Lambda U^\dagger
 The compressed $\Gamma$ is then obtained via $\Gamma_\text{compressed} = \Gamma U$,
 where the columns of $U$ are restricted such that $\lambda >$ `thresh`.
 """
-Base.@kwdef struct CoulombGramian <: ΓCompressionStrategy 
+Base.@kwdef struct CoulombGramian 
     thresh::Float64 = 1e-6
 end
-function _compress_coulomb_vertex(
+function compress_coulomb_vertex(
     ΓmnG::AbstractArray{T,5},
     strategy::CoulombGramian
 ) where {T}
@@ -212,7 +168,7 @@ end
 
 
 @doc raw"""
-    AdaptiveRandomizedSVD <: ΓCompressionStrategy
+    AdaptiveRandomizedSVD
 
 This strategy compresses the Coulomb vertex $\Gamma_{mn}^{G}$ via an adaptive randomized SVD.
 
@@ -230,17 +186,17 @@ where $\tilde \Gamma = \Gamma Q$.
 The compressed $\Gamma$ is then obtained via $\Gamma_\text{compressed} = \tilde \Gamma U$.
 
 The dimension $N_F$ is found by a preceding adaptive range finder. 
-This finder iteratively increases the columns of Q (i.e. $N_F$) in steps of $\sqrt{N_{pp}}$ 
+This finder iteratively increases the columns of Q (i.e. $N_F$) in steps of $2\sqrt{N_{pp}}$ 
 and stops when the error for a stochastic test vector $\omega$
 ```math
 \varepsilon =  \Vert (1 - QQ^\dagger)\Gamma^\dagger \omega \Vert
 ```
-is smaller than thresh/10.
+is smaller than thresh/2.
 """
-Base.@kwdef struct AdaptiveRandomizedSVD <: ΓCompressionStrategy 
+Base.@kwdef struct AdaptiveRandomizedSVD
     thresh::Float64 = 1e-6
 end
-function _compress_coulomb_vertex(
+function compress_coulomb_vertex(
     ΓmnG::AbstractArray{T,5},
     strategy::AdaptiveRandomizedSVD
 ) where {T}

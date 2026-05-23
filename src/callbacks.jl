@@ -1,24 +1,3 @@
-"""
-Combines multiple callbacks into one.
-"""
-function chain_callbacks(callbacks...)
-    # Filter out 'nothing' to avoid errors
-    valid_callbacks = filter(!isnothing, callbacks)
-    
-    if isempty(valid_callbacks)
-        return nothing
-    elseif length(valid_callbacks) == 1
-        return first(valid_callbacks)
-    else
-        # Return a functor that iterates through them
-        return function(info)
-            for cb in valid_callbacks
-                cb(info)
-            end
-        end
-    end
-end
-
 
 """
 Default callback function to dump status of the DFTK.LOBPCG function
@@ -56,5 +35,20 @@ function make_lobpcg_callback(thresh; description=nothing)
         if nlocked >= n_conv_check 
             @printf("\n") 
         end
+    end
+end
+
+
+function make_coulomb_vertex_callback(total_steps)
+    p = Progress(
+        total_steps; 
+        desc="Computing Coulomb Vertex",
+        dt=0.5,
+        barlen=20,
+        barglyphs=BarGlyphs(' ', '━', '╸', '─', ' '),
+        color=:normal
+    )
+    return function()
+        next!(p)
     end
 end

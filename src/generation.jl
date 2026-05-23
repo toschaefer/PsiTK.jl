@@ -1,4 +1,5 @@
-export DownfoldDSV, CanonicalVirtuals
+export DensitySpecificVirtuals, CanonicalVirtuals
+export LOBPCGSolver, FullDiagonalizationSolver
 export generate_orbitals
 
 using LinearAlgebra
@@ -17,34 +18,49 @@ function construct_stochastic_orbitals(N, kpt, orbitalType)
     return Matrix(qr_decomp.Q)
 end
 
-"""
-    DownfoldDSV(; n_orbitals=100, tol=1e-5, maxiter=500)
+# --- Solvers ---
 
-Algorithm to compute compressed virtual orbitals (Downfolded Singular Vectors)
-by diagonalizing the exact exchange operator in the full virtual space.
-"""
-Base.@kwdef struct DownfoldDSV
-    n_orbitals::Int = 100
+Base.@kwdef struct LOBPCGSolver
     tol::Float64 = 1e-5
     maxiter::Int = 500
 end
 
-"""
-    CanonicalVirtuals(; n_orbitals=100)
+struct FullDiagonalizationSolver end
 
-Algorithm to compute canonical virtual orbitals by diagonalizing the Fock
-Hamiltonian. Set `n_orbitals = :all` to compute the full virtual plane-wave space.
+# --- Targets ---
+
 """
-Base.@kwdef struct CanonicalVirtuals
-    n_orbitals::Union{Int, Symbol} = 100
+    DensitySpecificVirtuals(; n_orbitals)
+
+Target to compute compressed virtual orbitals (Density Specific Virtuals)
+by solving a generalized eigenvalue problem in the full virtual space:
+```math
+\mathcal K \varphi  =  \lambda h \varphi 
+```
+where $\mathcal K$ and $h$ are the Fock exchange operator and the Fock Hamoltonian, respectively.
+"""
+Base.@kwdef struct DensitySpecificVirtuals
+    n_orbitals::Int
 end
 
 """
-    generate_orbitals(alg::DownfoldDSV, scfres, occ_space)
+    CanonicalVirtuals(; n_orbitals)
 
-Generates DSVs using DFTK's `LOBPCG` on the exact exchange operator.
+Target to compute canonical virtual orbitals by diagonalizing the Fock
+Hamiltonian. Set `n_orbitals = :all` to compute the full virtual plane-wave space.
 """
-function generate_orbitals(alg::DownfoldDSV, scfres, occ_space::OrbitalSpace{B, T, R}) where {B, T, R}
+Base.@kwdef struct CanonicalVirtuals
+    n_orbitals::Union{Int, Symbol}
+end
+
+# --- Generators ---
+
+"""
+    generate_orbitals(target::DensitySpecificVirtuals, scfres, occ_space, solver::LOBPCGSolver)
+
+Generates DSVs using an iterative LOBPCG solver on the exact exchange operator.
+"""
+function generate_orbitals(target::DensitySpecificVirtuals, scfres, occ_space::OrbitalSpace{B, T, R}, solver::LOBPCGSolver) where {B, T, R}
     basis = scfres.basis
     Ecut = basis.Ecut
 
@@ -60,9 +76,14 @@ function generate_orbitals(alg::DownfoldDSV, scfres, occ_space::OrbitalSpace{B, 
         kpt = basis.kpoints[ik]
         Kk = K[ik]
         ψocck = occ_space.ψ[ik]
+        Nfull = length(kpt.G_vectors)
+        
+        if target.n_orbitals > 0.1 * Nfull
+            @warn "DSV n_orbitals ($(target.n_orbitals)) is > 10% of plane waves ($Nfull). Full diagonalization might be faster."
+        end
         
         # Stochastic guess
-        ϕk = construct_stochastic_orbitals(alg.n_orbitals, kpt, T)
+        ϕk = construct_stochastic_orbitals(target.n_orbitals, kpt, T)
         
         # Build LevelShifted operators
         ε_homo = maximum(occ_space.eigenvalues[ik])
@@ -77,7 +98,7 @@ function generate_orbitals(alg::DownfoldDSV, scfres, occ_space::OrbitalSpace{B, 
         # LOBPCG
         dsv = DFTK.LOBPCG(
             Kk_virt, ϕk, ham_hf_levelshifted, kinetic_preconditioner,
-            alg.tol, alg.maxiter, callback=DFTK.DefaultLobpcgCallback()
+            solver.tol, solver.maxiter, callback=DFTK.DefaultLobpcgCallback()
         )
         
         # Recanonicalize DSVs
@@ -88,18 +109,18 @@ function generate_orbitals(alg::DownfoldDSV, scfres, occ_space::OrbitalSpace{B, 
         
         push!(ψ_dsv, X_ortho * canonical_dsv_res.vectors)
         push!(eigenvalues_dsv, canonical_dsv_res.values)
-        push!(occupations_dsv, zeros(R, alg.n_orbitals))
+        push!(occupations_dsv, zeros(R, target.n_orbitals))
     end
     
     return OrbitalSpace{B, T, R}(basis, ψ_dsv, eigenvalues_dsv, occupations_dsv, occ_space.εF)
 end
 
 """
-    generate_orbitals(alg::CanonicalVirtuals, scfres, occ_space)
+    generate_orbitals(target::CanonicalVirtuals, scfres, occ_space, solver::LOBPCGSolver)
 
-Generates canonical virtuals from the Fock Hamiltonian.
+Generates canonical virtuals using an iterative LOBPCG solver on the Fock operator.
 """
-function generate_orbitals(alg::CanonicalVirtuals, scfres, occ_space::OrbitalSpace{B, T, R}) where {B, T, R}
+function generate_orbitals(target::CanonicalVirtuals, scfres, occ_space::OrbitalSpace{B, T, R}, solver::LOBPCGSolver) where {B, T, R}
     basis = scfres.basis
     Ecut = basis.Ecut
     
@@ -112,7 +133,11 @@ function generate_orbitals(alg::CanonicalVirtuals, scfres, occ_space::OrbitalSpa
         ψocck = occ_space.ψ[ik]
         Nfull = length(kpt.G_vectors)
         
-        N_virt = alg.n_orbitals === :all ? Nfull - size(ψocck, 2) : alg.n_orbitals
+        N_virt = target.n_orbitals === :all ? (Nfull - size(ψocck, 2)) : target.n_orbitals
+        
+        if N_virt > 0.1 * Nfull
+            @warn "CanonicalVirtuals n_orbitals ($N_virt) is > 10% of plane waves ($Nfull). FullDiagonalizationSolver might be faster."
+        end
         
         ϕk_canon = construct_stochastic_orbitals(N_virt, kpt, T)
         ϕk_canon .-= ψocck * (ψocck' * ϕk_canon)   # Project out occupied
@@ -124,7 +149,7 @@ function generate_orbitals(alg::CanonicalVirtuals, scfres, occ_space::OrbitalSpa
         
         canon_res = DFTK.LOBPCG(
             ham_hf_levelshifted, ϕk_canon, IdentityOperator(Nfull, T), 
-            kinetic_preconditioner, 1e-5, 500, callback=DFTK.DefaultLobpcgCallback()
+            kinetic_preconditioner, solver.tol, solver.maxiter, callback=DFTK.DefaultLobpcgCallback()
         )
         
         ε_virtk = canon_res.λ .+ ham_hf_levelshifted.ε_homo .- ham_hf_levelshifted.safe_shift
@@ -135,4 +160,59 @@ function generate_orbitals(alg::CanonicalVirtuals, scfres, occ_space::OrbitalSpa
     end
     
     return OrbitalSpace{B, T, R}(basis, ψ_virt, eigenvalues_virt, occupations_virt, occ_space.εF)
+end
+
+"""
+    generate_orbitals(target::CanonicalVirtuals, scfres, occ_space, solver::FullDiagonalizationSolver)
+
+Generates canonical virtuals using full dense exact diagonalization on the Fock operator.
+"""
+function generate_orbitals(target::CanonicalVirtuals, scfres, occ_space::OrbitalSpace{B, T, R}, solver::FullDiagonalizationSolver) where {B, T, R}
+    basis = scfres.basis
+    
+    ψ_virt = Matrix{T}[]
+    eigenvalues_virt = Vector{R}[]
+    occupations_virt = Vector{R}[]
+
+    for ik in 1:length(basis.kpoints)
+        kpt = basis.kpoints[ik]
+        ψocck = occ_space.ψ[ik]
+        Nfull = length(kpt.G_vectors)
+        N_virt = target.n_orbitals === :all ? (Nfull - size(ψocck, 2)) : target.n_orbitals
+        
+        # Build the full identity matrix for this k-point space
+        I_mat = Matrix{T}(I, Nfull, Nfull)
+        
+        # Project out the occupied space: I_virt = I - ψocc * ψocc'
+        I_virt = I_mat .- ψocck * ψocck'
+        
+        # Apply the Fock Hamiltonian to the virtual subspace projector
+        H_dense = Hermitian(scfres.ham[ik] * I_virt)
+        
+        # Diagonalize the full matrix
+        eigen_res = eigen(H_dense)
+        
+        # Extract the highest N_virt eigenvalues and eigenvectors
+        # Since occupied states were projected out, they will have eigenvalues of 0 
+        # (or effectively zero since H_dense applied to them gives 0 vector),
+        # so the virtuals are the largest eigenvalues
+        indices = (Nfull - N_virt + 1):Nfull
+        
+        push!(ψ_virt, eigen_res.vectors[:, indices])
+        push!(eigenvalues_virt, eigen_res.values[indices])
+        push!(occupations_virt, zeros(R, N_virt))
+    end
+    
+    return OrbitalSpace{B, T, R}(basis, ψ_virt, eigenvalues_virt, occupations_virt, occ_space.εF)
+end
+
+# --- Fallbacks ---
+
+function generate_orbitals(target::DensitySpecificVirtuals, scfres, occ_space)
+    generate_orbitals(target, scfres, occ_space, LOBPCGSolver())
+end
+
+function generate_orbitals(target::CanonicalVirtuals, scfres, occ_space)
+    solver = target.n_orbitals === :all ? FullDiagonalizationSolver() : LOBPCGSolver()
+    generate_orbitals(target, scfres, occ_space, solver)
 end

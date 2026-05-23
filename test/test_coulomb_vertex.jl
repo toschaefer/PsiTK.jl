@@ -18,6 +18,6 @@
     # Calculate a fingerprint scalar for regression testing
     val = norm(ΓmnG)
 
-    # Check against the reference value
-    @test isapprox(val, 2.3235541514083575, rtol=1e-5)
+    # Check against the reference value (updated for Ecut_ratio=2/3 truncation)
+    @test isapprox(val, 2.3187697245208185, rtol=1e-5)
 end
