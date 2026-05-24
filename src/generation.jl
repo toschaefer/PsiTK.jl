@@ -38,6 +38,9 @@ by solving a generalized eigenvalue problem in the full virtual space:
 \mathcal K \varphi  =  \lambda h \varphi 
 ```
 where $\mathcal K$ and $h$ are the Fock exchange operator and the Fock Hamiltonian, respectively.
+
+When generated, the orbitals returned ($\psi_i$) will be strictly orthogonalized spanning the DSV subspace.
+The associated orbital energies will strictly track the generalized Rayleigh quotient ($\lambda_i = \langle \psi_i | \mathcal K | \psi_i \rangle / \langle \psi_i | \mathcal h | \psi_i \rangle$) evaluated exactly within the orthogonalized states.
 """
 Base.@kwdef struct DensitySpecificVirtuals
     n_orbitals::Int
@@ -58,7 +61,7 @@ end
 """
     generate_orbitals(target::DensitySpecificVirtuals, scfres, occ_space, solver::LOBPCGSolver)
 
-Generates DSVs using an iterative LOBPCG solver on the exact exchange operator.
+Generates DSVs using an iterative LOBPCG solver.
 """
 function generate_orbitals(
     target::DensitySpecificVirtuals,
@@ -113,14 +116,21 @@ function generate_orbitals(
             callback = DFTK.DefaultLobpcgCallback(),
         )
 
-        # Recanonicalize DSVs
+        # Orthogonalize DSVs (re-canonicalization is left to the user if needed)
         qr_decomp = qr(dsv.X)
         X_ortho = Matrix(qr_decomp.Q)
-        h_dsv = Hermitian(X_ortho' * (scfres.ham[ik] * X_ortho))
-        canonical_dsv_res = eigen(h_dsv)
+        
+        # Estimate eigenvalues via the generalized Rayleigh quotient for the orthogonalized orbitals
+        # y_i = <φ_i | A | φ_i> / <φ_i | B | φ_i> where A = Kk_virt and B = ham_hf_levelshifted
+        # Since A X = B X Λ and X' B X = I, we have X' A X = Λ
+        # With X = Q R  =>  Q = X R^{-1}, letting invR = R \ I, we get Q' A Q = invR' Λ invR and Q' B Q = invR' invR
+        invR = qr_decomp.R \ I
+        num = real(diag(invR' * Diagonal(dsv.λ) * invR))
+        den = real(diag(invR' * invR))
+        h_dsv_diag = num ./ den
 
-        push!(ψ_dsv, X_ortho * canonical_dsv_res.vectors)
-        push!(eigenvalues_dsv, canonical_dsv_res.values)
+        push!(ψ_dsv, X_ortho)
+        push!(eigenvalues_dsv, h_dsv_diag)
         push!(occupations_dsv, zeros(R, target.n_orbitals))
     end
 
@@ -215,26 +225,26 @@ function generate_orbitals(
         Nfull = length(kpt.G_vectors)
         N_virt = target.n_orbitals === :all ? (Nfull - size(ψocck, 2)) : target.n_orbitals
 
-        # Build the full identity matrix for this k-point space
+        # Shift the occupied states using LevelShiftedOperator, identical to LOBPCGSolver
+        ε_homo = maximum(occ_space.eigenvalues[ik])
+        Ecut = basis.Ecut
+        ham_hf_levelshifted = LevelShiftedOperator(scfres.ham[ik], ψocck, ε_homo, 1e-5, 2 * Ecut)
+
+        # Build the full identity matrix for this k-point space to compute the dense Hamiltonian
         I_mat = Matrix{T}(I, Nfull, Nfull)
-
-        # Project out the occupied space: I_virt = I - ψocc * ψocc'
-        I_virt = I_mat .- ψocck * ψocck'
-
-        # Apply the Fock Hamiltonian to the virtual subspace projector
-        H_dense = Hermitian(scfres.ham[ik] * I_virt)
+        H_dense = Hermitian(Matrix(ham_hf_levelshifted * I_mat))
 
         # Diagonalize the full matrix
         eigen_res = eigen(H_dense)
 
-        # Extract the highest N_virt eigenvalues and eigenvectors
-        # Since occupied states were projected out, they will have eigenvalues of 0 
-        # (or effectively zero since H_dense applied to them gives 0 vector),
-        # so the virtuals are the largest eigenvalues
-        indices = (Nfull-N_virt+1):Nfull
+        # Extract the lowest N_virt eigenvalues and eigenvectors (the true virtual states)
+        indices = 1:N_virt
+
+        # Shift the eigenvalues back since LevelShiftedOperator shifts the whole spectrum
+        ε_virtk = eigen_res.values[indices] .+ ham_hf_levelshifted.ε_homo .- ham_hf_levelshifted.safe_shift
 
         push!(ψ_virt, eigen_res.vectors[:, indices])
-        push!(eigenvalues_virt, eigen_res.values[indices])
+        push!(eigenvalues_virt, ε_virtk)
         push!(occupations_virt, zeros(R, N_virt))
     end
 

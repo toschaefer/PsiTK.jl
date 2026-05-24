@@ -14,6 +14,10 @@ include("operators.jl")
 include("selection.jl")
 include("generation.jl")
 include("manipulation.jl")
+export generate_orbitals
+export CanonicalVirtuals, DensitySpecificVirtuals
+export LOBPCGSolver, FullDiagonalizationSolver
+export OccupiedOrbitals, select_orbitals
 export compute_coulomb_vertex
 export compress_coulomb_vertex
 export AdaptiveRandomizedSVD
