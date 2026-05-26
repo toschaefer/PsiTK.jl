@@ -1,4 +1,4 @@
-export LOBPCGEigensolver, FullDiagonalizationEigensolver
+export LOBPCGEigensolver, FullDiagonalizationEigensolver, BlockDavidson
 
 # Wrapper for DFTK's LOBPCG
 Base.@kwdef struct LOBPCGEigensolver
@@ -9,8 +9,11 @@ end
 # Wrapper for LinearAlgebra.eigen
 struct FullDiagonalizationEigensolver end
 
-# ---------------------------------------------------------
-# FUTURE SOLVERS (e.g. Davidson)
-# ---------------------------------------------------------
-# export DavidsonEigensolver
-# include("davidson.jl")
+Base.@kwdef struct BlockDavidson
+    tol::Float64 = 1e-6
+    use_jabobi_davidson::Bool = false
+    maxiter::Int = 200
+    # TODO: add further arguments here
+end
+
+include("davidson.jl")

@@ -15,7 +15,7 @@ include("selection.jl")
 include("eigensolvers/eigensolvers.jl")
 include("virtual_orbitals.jl")
 include("manipulation.jl")
-export generate_orbitals, CanonicalVirtuals, DensitySpecificVirtuals
+export generate_orbitals, CanonicalVirtuals, DensitySpecificVirtuals, MaximalExchangeVirtuals
 # solvers are exported in eigensolvers.jl
 export OccupiedOrbitals, select_orbitals
 export compute_coulomb_vertex

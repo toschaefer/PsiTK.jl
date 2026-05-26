@@ -1,4 +1,4 @@
-export DensitySpecificVirtuals, CanonicalVirtuals
+export DensitySpecificVirtuals, CanonicalVirtuals, MaximalExchangeVirtuals
 export generate_orbitals
 
 using LinearAlgebra
@@ -44,6 +44,19 @@ Hamiltonian. Set `n_orbitals = :all` to compute the full virtual plane-wave spac
 """
 Base.@kwdef struct CanonicalVirtuals
     n_orbitals::Union{Int,Symbol}
+end
+
+"""
+    MaximalExchangeVirtuals(; n_orbitals)
+
+Target to compute virtual orbitals that maximize exchange, by solving the eigenvalue problem:
+```math
+\\mathcal K \\varphi  =  \\lambda \\varphi 
+```
+where $\\mathcal K$ is the Fock exchange operator.
+"""
+Base.@kwdef struct MaximalExchangeVirtuals
+    n_orbitals::Int
 end
 
 # --- Generators ---
@@ -245,6 +258,21 @@ function generate_orbitals(
         occupations_virt,
         occ_space.εF,
     )
+end
+
+"""
+    generate_orbitals(target::MaximalExchangeVirtuals, scfres, occ_space, solver::BlockDavidson)
+
+Generates Maximal Exchange Virtuals by solving the eigenvalue problem K φ = λ φ using a BlockDavidson solver.
+"""
+function generate_orbitals(
+    target::MaximalExchangeVirtuals,
+    scfres,
+    occ_space::OrbitalSpace{B,T,R},
+    solver::BlockDavidson,
+) where {B,T,R}
+    # TODO: Mereto
+    error("Not implemented yet.")
 end
 
 # --- Fallbacks ---
