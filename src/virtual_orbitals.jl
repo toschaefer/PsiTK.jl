@@ -46,14 +46,14 @@ Base.@kwdef struct CanonicalVirtuals
     n_orbitals::Union{Int,Symbol}
 end
 
-"""
+@doc raw"""
     MaximalExchangeVirtuals(; n_orbitals)
 
 Target to compute virtual orbitals that maximize exchange, by solving the eigenvalue problem:
 ```math
-\\mathcal K \\varphi  =  \\lambda \\varphi 
+\mathcal K \varphi  =  \lambda \varphi 
 ```
-where $\\mathcal K$ is the Fock exchange operator.
+where $\mathcal K$ is the Fock exchange operator.
 """
 Base.@kwdef struct MaximalExchangeVirtuals
     n_orbitals::Int
