@@ -9,11 +9,4 @@ end
 # Wrapper for LinearAlgebra.eigen
 struct FullDiagonalizationEigensolver end
 
-Base.@kwdef struct BlockDavidson
-    tol::Float64 = 1e-6
-    use_jabobi_davidson::Bool = false
-    maxiter::Int = 200
-    # TODO: add further arguments here
-end
-
 include("davidson.jl")
