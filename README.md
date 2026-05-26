@@ -50,7 +50,7 @@ occ_space = select_orbitals(OrbitalSpace(scfres), OccupiedOrbitals())
 
 # 2. Generate Density Specific Virtuals using PsiTK
 target = DensitySpecificVirtuals(50)
-solver = LOBPCGSolver(tol=1e-6)
+solver = LOBPCGEigensolver(tol=1e-6)
 dsv_space = generate_orbitals(target, scfres, occ_space, solver)
 
 # 3. Dump correlation tensors for Cc4s

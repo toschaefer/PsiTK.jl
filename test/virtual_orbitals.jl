@@ -13,7 +13,7 @@
     # ---------------------------------------------------------
     # 1. Test CanonicalVirtuals (FullDiag)
     # ---------------------------------------------------------
-    solver_fd = FullDiagonalizationSolver()
+    solver_fd = FullDiagonalizationEigensolver()
     
     # Test N_virt = :all
     target_canon_all = CanonicalVirtuals(:all)
@@ -42,7 +42,7 @@
     # ---------------------------------------------------------
     # 2. Test CanonicalVirtuals (LOBPCG)
     # ---------------------------------------------------------
-    solver_lobpcg = LOBPCGSolver(tol=1e-7, maxiter=500)
+    solver_lobpcg = LOBPCGEigensolver(tol=1e-7, maxiter=500)
     virt_canon_lobpcg = generate_orbitals(target_canon, scfres, occ_space, solver_lobpcg)
     
     @test size(virt_canon_lobpcg.ψ[1]) == (Nfull, N_virt_target)

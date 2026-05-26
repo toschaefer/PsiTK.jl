@@ -12,11 +12,11 @@ include("callbacks.jl")
 include("types.jl")
 include("operators.jl")
 include("selection.jl")
-include("generation.jl")
+include("eigensolvers/eigensolvers.jl")
+include("virtual_orbitals.jl")
 include("manipulation.jl")
-export generate_orbitals
-export CanonicalVirtuals, DensitySpecificVirtuals
-export LOBPCGSolver, FullDiagonalizationSolver
+export generate_orbitals, CanonicalVirtuals, DensitySpecificVirtuals
+# solvers are exported in eigensolvers.jl
 export OccupiedOrbitals, select_orbitals
 export compute_coulomb_vertex
 export compress_coulomb_vertex
