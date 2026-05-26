@@ -261,15 +261,15 @@ function generate_orbitals(
 end
 
 """
-    generate_orbitals(target::MaximalExchangeVirtuals, scfres, occ_space, solver::BlockDavidson)
+    generate_orbitals(target::MaximalExchangeVirtuals, scfres, occ_space, solver::BlockDavidsonEigensolver)
 
-Generates Maximal Exchange Virtuals by solving the eigenvalue problem K φ = λ φ using a BlockDavidson solver.
+Generates Maximal Exchange Virtuals by solving the eigenvalue problem K φ = λ φ using a BlockDavidsonEigensolver solver.
 """
 function generate_orbitals(
     target::MaximalExchangeVirtuals,
     scfres,
     occ_space::OrbitalSpace{B,T,R},
-    solver::BlockDavidson,
+    solver::BlockDavidsonEigensolver,
 ) where {B,T,R}
     # TODO: Mereto
     error("Not implemented yet.")

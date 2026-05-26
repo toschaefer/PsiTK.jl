@@ -1,4 +1,4 @@
-export LOBPCGEigensolver, FullDiagonalizationEigensolver, BlockDavidson
+export LOBPCGEigensolver, FullDiagonalizationEigensolver, BlockDavidsonEigensolver
 
 # Wrapper for DFTK's LOBPCG
 Base.@kwdef struct LOBPCGEigensolver
