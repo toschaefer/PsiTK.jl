@@ -12,7 +12,7 @@
 
 Enabling post-Hartree–Fock and beyond-DFT methods for 3D models under periodic boundary conditions, PsiTK acts as the wavefunction counterpart of the [density-functional toolkit (DFTK.jl)](https://github.com/JuliaMolSim/DFTK.jl) and provides an interface to the massively parallel coupled cluster solver [Cc4s](https://gitlab.cc4s.org/cc4s/cc4s).
 
-## Statement of Need
+## Motivation
 
 While established electronic structure codes (VASP, Quantum Espresso, ABINIT, CP2K, ...) are highly optimized for production calculations, their monolithic architectures and accumulated historical complexity often create a high barrier to implementing new ideas.
 

@@ -28,9 +28,9 @@ Francesco Mereto, Master's Thesis, 2026 (link?)
 # Arguments
 - `A`: The linear operator or matrix to diagonalize.
 - `X0`: The initial guess for the eigenvectors.
-- `solver`: The `BlockDavidson` configuration (tolerance, max iterations, etc.).
+- `solver`: The `BlockDavidsonEigensolver` configuration (tolerance, max iterations, etc.).
 """
-function davidson(A, X0, solver::BlockDavidson; kwargs...)
+function davidson(A, X0, solver::BlockDavidsonEigensolver; kwargs...)
     # TODO: Mereto
     error("Block Davidson solver not implemented yet.")
     
