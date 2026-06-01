@@ -46,9 +46,9 @@ function main()
     # Select the occupied subspace
     occ_space = select_orbitals(scf_space, OccupiedOrbitals(threshold = 1e-6))
 
-    # Generate a generalized set of orbitals (e.g., 50 DSVs)
+    # Generate a generalized set of orbitals (e.g., 32 DSVs)
     println("Compute DSVs")
-    dsv_alg = DensitySpecificVirtuals(50)
+    dsv_alg = DensitySpecificVirtuals(64)
     solver = LOBPCGEigensolver(tol=1e-6, maxiter=500)
     dsv_space = generate_orbitals(dsv_alg, scfres_hf, occ_space, solver)
 
