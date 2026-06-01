@@ -48,9 +48,10 @@ function main()
 
     # Generate a generalized set of orbitals (e.g., 32 DSVs)
     println("Compute DSVs")
-    dsv_alg = DensitySpecificVirtuals(64)
+    dsv_alg = DensitySpecificVirtuals(44)
     solver = LOBPCGEigensolver(tol=1e-6, maxiter=500)
     dsv_space = generate_orbitals(dsv_alg, scfres_hf, occ_space, solver)
+    println(dsv_space.eigenvalues)
 
     # Merge spaces to create the Active Space using lazy views to save memory
     println("Merge spaces")

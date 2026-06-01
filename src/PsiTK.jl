@@ -9,7 +9,7 @@ using DFTK
 include("callbacks.jl")
 
 # Core OrbitalSpace and API
-include("types.jl")
+
 include("operators.jl")
 include("orbital_spaces.jl")
 include("eigensolvers/eigensolvers.jl")
