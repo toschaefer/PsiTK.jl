@@ -29,8 +29,9 @@ by solving a generalized eigenvalue problem in the full virtual space:
 ```
 where $\mathcal K$ and $h$ are the Fock exchange operator and the Fock Hamiltonian, respectively.
 
-When generated, the orbitals returned ($\psi_i$) will be strictly orthogonalized spanning the DSV subspace.
-The associated orbital energies will strictly track the generalized Rayleigh quotient ($\lambda_i = \langle \psi_i | \mathcal K | \psi_i \rangle / \langle \psi_i | \mathcal h | \psi_i \rangle$) evaluated exactly within the orthogonalized states.
+When generated, the orbitals returned ($\varphi_i$) will directly span the DSV subspace. 
+These orbitals will NOT be strictly orthogonalized initially, ensuring their orbital energies strictly match the generalized Rayleigh quotient ($\lambda_i = \langle \varphi_i | \mathcal K | \varphi_i \rangle / \langle \varphi_i | \mathcal h | \varphi_i \rangle$).
+They can be orthonormalized and canonicalized later using `canonicalize_orbitals`.
 """
 Base.@kwdef struct DensitySpecificVirtuals
     n_orbitals::Int
@@ -119,25 +120,12 @@ function generate_orbitals(
             callback = DFTK.DefaultLobpcgCallback(),
         )
 
-        # Orthogonalize DSVs (re-canonicalization is left to the user if needed)
-        qr_decomp = qr(dsv.X)
-        X_ortho = Matrix(qr_decomp.Q)
-        
-        # Estimate eigenvalues via the generalized Rayleigh quotient for the orthogonalized orbitals
-        # y_i = <φ_i | A | φ_i> / <φ_i | B | φ_i> where A = Kk_virt and B = ham_hf_levelshifted
-        # Since A X = B X Λ and X' B X = I, we have X' A X = Λ
-        # With X = Q R  =>  Q = X R^{-1}, letting invR = R \ I, we get Q' A Q = invR' Λ invR and Q' B Q = invR' invR
-        invR = qr_decomp.R \ I
-        num = real(diag(invR' * Diagonal(dsv.λ) * invR))
-        den = real(diag(invR' * invR))
-        h_dsv_diag = num ./ den
-
-        push!(ψ_dsv, X_ortho)
-        push!(eigenvalues_dsv, h_dsv_diag)
+        push!(ψ_dsv, dsv.X)
+        push!(eigenvalues_dsv, dsv.λ)
         push!(occupations_dsv, zeros(R, target.n_orbitals))
     end
 
-    return OrbitalSpace{B,T,R}(basis, ψ_dsv, eigenvalues_dsv, occupations_dsv, occ_space.εF)
+    return OrbitalSpace{B,T,R}(basis, ψ_dsv, eigenvalues_dsv, occupations_dsv, occ_space.εF, false)
 end
 
 """
@@ -202,6 +190,7 @@ function generate_orbitals(
         eigenvalues_virt,
         occupations_virt,
         occ_space.εF,
+        true # canonical virtuals are strictly orthonormal
     )
 end
 
@@ -257,6 +246,7 @@ function generate_orbitals(
         eigenvalues_virt,
         occupations_virt,
         occ_space.εF,
+        true # canonical virtuals are strictly orthonormal
     )
 end
 

@@ -1,5 +1,7 @@
 .*.swp
 .*.swo
+*.yaml
+*.elements
 *~
 
 Manifest.toml

@@ -62,8 +62,11 @@
     virt_dsv_1 = generate_orbitals(target_dsv, scfres, occ_space, solver_lobpcg)
     
     @test size(virt_dsv_1.ψ[1]) == (Nfull, N_virt_target)
-    @test virt_dsv_1.ψ[1]' * virt_dsv_1.ψ[1] ≈ I
+    @test virt_dsv_1.is_orthonormal == false
     @test norm(occ_space.ψ[1]' * virt_dsv_1.ψ[1]) < 1e-6
-    @test isapprox(norm(virt_dsv_1.ψ[1]), 3.4641016151377544, rtol=1e-6)
-    @test isapprox(sum(virt_dsv_1.eigenvalues[1]), -0.9933197222944932, rtol=1e-6)
+    
+    # Canonicalizing the DSVs should restore exact orthonormality and set the flag
+    virt_dsv_canon = canonicalize_orbitals(virt_dsv_1, scfres.ham)
+    @test virt_dsv_canon.is_orthonormal == true
+    @test virt_dsv_canon.ψ[1]' * virt_dsv_canon.ψ[1] ≈ I
 end

@@ -27,6 +27,7 @@ struct OrbitalSpace{B,T,R<:Real}
     eigenvalues::Vector{Vector{R}}
     occupations::Vector{Vector{R}}
     εF::R
+    is_orthonormal::Bool
 end
 
 # Extract the space directly from a converged DFTK scfres
@@ -41,6 +42,7 @@ function OrbitalSpace(scfres)
         scfres.eigenvalues,
         scfres.occupation,
         scfres.εF,
+        true # Converged SCF states are always orthonormal
     )
 end
 
@@ -54,6 +56,7 @@ function merge_spaces(spaces::OrbitalSpace{B,T,R}...) where {B,T,R}
 
     basis = spaces[1].basis
     nkpt = length(basis.kpoints)
+    is_orthonormal_merged = all(s.is_orthonormal for s in spaces)
 
     ψ_merged = Matrix{T}[]
     eigenvalues_merged = Vector{R}[]
@@ -75,6 +78,7 @@ function merge_spaces(spaces::OrbitalSpace{B,T,R}...) where {B,T,R}
         eigenvalues_merged,
         occupations_merged,
         spaces[1].εF,
+        is_orthonormal_merged
     )
 end
 
@@ -95,9 +99,14 @@ function canonicalize_orbitals(space::OrbitalSpace{B,T,R}, hamiltonian) where {B
         # Project into the subspace to form a small dense matrix
         h_sub = Hermitian(Matrix(X' * HX))
 
-        res = eigen(h_sub)
+        if space.is_orthonormal
+            res = eigen(h_sub)
+        else
+            S_sub = Hermitian(Matrix(X' * X))
+            res = eigen(h_sub, S_sub)
+        end
 
-        # Rotate original wavefunctions to diagonalize
+        # Rotate original wavefunctions to diagonalize 
         push!(ψ_canon, X * res.vectors)
         push!(eigenvalues_canon, res.values)
     end
@@ -108,6 +117,7 @@ function canonicalize_orbitals(space::OrbitalSpace{B,T,R}, hamiltonian) where {B
         eigenvalues_canon,
         space.occupations,
         space.εF,
+        true 
     )
 end
 
@@ -157,6 +167,7 @@ function select_orbitals(space::OrbitalSpace{B,T,R}, alg::OccupiedOrbitals) wher
         eigenvalues_occ,
         occupations_occ,
         space.εF,
+        space.is_orthonormal
     )
 end
 
@@ -182,5 +193,6 @@ function select_orbitals(space::OrbitalSpace{B,T,R}, alg::IndexSelection) where 
         eigenvalues_sel,
         occupations_sel,
         space.εF,
+        space.is_orthonormal
     )
 end
