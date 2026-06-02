@@ -17,6 +17,7 @@ function write_cc4s_tensor(
     scalarType::String = "Real64",
     elementType::String = "IeeeBinaryFile",
     metaData::Dict = Dict{String,Any}(),
+    unit::Float64 = 1.0,
     force = false
 )
     yamlfile = joinpath(folder, "$name.yaml")
@@ -31,7 +32,7 @@ function write_cc4s_tensor(
         "scalarType" => scalarType,
         "dimensions" => dimensions,
         "elements" => Dict("type" => elementType),
-        "unit" => 1.0,  # DFTK using Hartree as well
+        "unit" => unit,
         "metaData" => metaData,
     )
     open(fp -> YAML.write(fp, data), yamlfile, "w")
@@ -122,7 +123,10 @@ end
     dump_cc4s_files(
         active_space::OrbitalSpace,
         ΓmnG::AbstractArray,
-        folder::AbstractString=joinpath(pwd(), "cc4s");
+        G_vectors::AbstractVector = SVector{3, Int}[],
+        kernel_fourier::AbstractVector = Float64[];
+        coulomb_vertex_singular_vectors::Union{AbstractMatrix, Nothing} = nothing,
+        folder::AbstractString=joinpath(pwd(), "cc4s"),
         force=false
     )
 
@@ -131,17 +135,26 @@ Write Cc4s input files (*.yaml and *.elements):
 - CoulombVertex
 - DeltaIntegralsHH
 - DeltaIntegralsPPHH
+- GridVectors (if G_vectors is provided)
+- CoulombPotential (if kernel_fourier is provided)
+- CoulombVertexSingularVectors (if coulomb_vertex_singular_vectors is provided)
 
 # Arguments
 - `active_space`: the `OrbitalSpace` containing the bands (occupations and eigenvalues)
 - `ΓmnG`: the (compressed) Coulomb vertex
+- `G_vectors`: corresponding plane-wave vectors
+- `kernel_fourier`: the evaluated Coulomb potential at the given G_vectors
+- `coulomb_vertex_singular_vectors`: transformation matrix from Coulomb vertex compression
 - `folder`: the target folder
 - `force`: if true existing files will be overwritten
 """
 function dump_cc4s_files(
     active_space::OrbitalSpace,
     ΓmnG::AbstractArray,
-    folder::AbstractString = joinpath(pwd(), "cc4s");
+    G_vectors::AbstractVector = SVector{3, Int}[],
+    kernel_fourier::AbstractVector = Float64[];
+    coulomb_vertex_singular_vectors::Union{AbstractMatrix, Nothing} = nothing,
+    folder::AbstractString = joinpath(pwd(), "cc4s"),
     force = false,
 )
     mkpath(folder)
@@ -212,5 +225,102 @@ function dump_cc4s_files(
         force = force
     )
 
-    return vcat(files_ene, files_coul, files_hh, files_pphh)
+    # --- dump Grid Vectors
+    files_grid = isempty(G_vectors) ? String[] : write_grid_vectors(folder, active_space.basis, G_vectors; force)
+
+    # --- dump Coulomb Potential
+    files_pot = isempty(kernel_fourier) ? String[] : write_coulomb_potential(folder, kernel_fourier; force)
+
+    # --- dump Coulomb Vertex Singular Vectors
+    files_u = isnothing(coulomb_vertex_singular_vectors) ? String[] : write_singular_vectors(folder, coulomb_vertex_singular_vectors; force)
+
+    return vcat(files_ene, files_coul, files_hh, files_pphh, files_grid, files_pot, files_u)
+end
+
+# Write GridVectors.yaml and GridVectors.elements
+function write_grid_vectors(
+    folder::AbstractString,
+    basis::PlaneWaveBasis,
+    G_vectors::AbstractVector;
+    force = false,
+)
+    # The GridVectors object contains the grid vectors of the employed plane-wave basis set
+    model = basis.model
+    # Convert integer G-vectors to Cartesian coordinates
+    G_cartesian = [model.recip_lattice * G for G in G_vectors]
+
+    dimensions = [
+        Dict("length" => 3, "type" => "Vector"),
+        Dict("length" => length(G_cartesian), "type" => "Momentum"),
+    ]
+    # Unit is 1.0 (Bohr^-1)
+    
+    # We still provide the Gi, Gj, Gk for reference, though not strictly needed for Cartesian
+    metaData = Dict(
+        "Gi" => model.recip_lattice[:, 1],
+        "Gj" => model.recip_lattice[:, 2],
+        "Gk" => model.recip_lattice[:, 3],
+    )
+
+    tensor_data = (
+        G[i] for G in G_cartesian for i = 1:3
+    )
+
+    return write_cc4s_tensor(
+        folder, "GridVectors", tensor_data;
+        dimensions = dimensions,
+        scalarType = "Real64",
+        elementType = "TextFile",
+        metaData = metaData,
+        unit = 1.0,
+        force = force
+    )
+end
+
+# Write CoulombPotential.yaml and CoulombPotential.elements
+function write_coulomb_potential(
+    folder::AbstractString,
+    kernel_fourier::AbstractVector;
+    force = false,
+)
+    dimensions = [
+        Dict("length" => length(kernel_fourier), "type" => "Momentum")
+    ]
+
+    return write_cc4s_tensor(
+        folder, "CoulombPotential", kernel_fourier;
+        dimensions = dimensions,
+        scalarType = "Real64",
+        elementType = "TextFile",
+        unit = 1.0,
+        force = force
+    )
+end
+
+# Write CoulombVertexSingularVectors.yaml and CoulombVertexSingularVectors.elements
+function write_singular_vectors(
+    folder::AbstractString,
+    coulomb_vertex_singular_vectors::AbstractMatrix{T};
+    force = false,
+) where {T}
+    # coulomb_vertex_singular_vectors has dimensions (N_G, N_F)
+    N_G, N_F = size(coulomb_vertex_singular_vectors)
+    dimensions = [
+        Dict("length" => N_F, "type" => "AuxiliaryField"),
+        Dict("length" => N_G, "type" => "Momentum")
+    ]
+    
+    # row-major write: loop over F then G
+    tensor_data = (
+        convert(Complex{Cdouble}, coulomb_vertex_singular_vectors[iG, iF]) for iF = 1:N_F for iG = 1:N_G
+    )
+
+    return write_cc4s_tensor(
+        folder, "CoulombVertexSingularVectors", tensor_data;
+        dimensions = dimensions,
+        scalarType = "Complex64",
+        elementType = "IeeeBinaryFile",
+        unit = 1.0,
+        force = force
+    )
 end

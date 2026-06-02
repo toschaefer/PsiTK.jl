@@ -63,12 +63,13 @@ function main()
 
     # Compute the Coulomb Vertex for the Active Space
     println("Compute Coulomb Vertex")
+    ΓmnG, G_vectors, kernel_fourier = compute_coulomb_vertex(active_space)
     vertex_alg = CoulombGramian()
-    vertices = compute_coulomb_vertex(active_space; compression = vertex_alg)
+    ΓmnF, coulomb_vertex_singular_vectors = compress_coulomb_vertex(ΓmnG, vertex_alg)
 
     # Dump to the specific correlation solver (Cc4s)
     println("prepare and dump Cc4s files")
-    dump_cc4s_files(active_space, vertices, @__DIR__; force = true)
+    dump_cc4s_files(active_space, ΓmnF, G_vectors, kernel_fourier; coulomb_vertex_singular_vectors = coulomb_vertex_singular_vectors, folder = @__DIR__, force = true)
 
     println("done")
 end

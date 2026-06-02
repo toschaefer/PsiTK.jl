@@ -1,7 +1,9 @@
 @doc raw"""
     compute_coulomb_vertex(
         active_space::OrbitalSpace;
-        n_bands=size(active_space.ψ[1], 2)
+        interaction_kernel=DFTK.Coulomb(DFTK.ProbeCharge()),
+        n_bands=size(active_space.ψ[1], 2),
+        Ecut_ratio=2/3
     )
 
 Compute the Coulomb vertex
@@ -15,14 +17,20 @@ v(\bm G) = \sqrt{\frac{4π}{\bm G^2}}
 
 # Arguments
 - `active_space`: the active orbital space 
+- `interaction_kernel`: the DFTK interaction kernel to use (default: Coulomb)
 - `n_bands`: number of bands to be considered
+- `Ecut_ratio`: ratio to reduce the plane-wave cutoff for the vertex (default: 2/3)
 
+# Returns
+A tuple `(ΓmnG, G_vectors, kernel_fourier)`:
+- `ΓmnG`: the Coulomb vertex tensor in the uncompressed plane-wave basis.
+- `G_vectors`: the corresponding plane-wave vectors.
+- `kernel_fourier`: the evaluated interaction kernel at the returned G vectors.
 """
 function compute_coulomb_vertex(
     active_space::OrbitalSpace;
     interaction_kernel = DFTK.Coulomb(DFTK.ProbeCharge()),
     n_bands = size(active_space.ψ[1], 2),
-    compression = nothing,
     Ecut_ratio = 2/3,
 )
     basis = active_space.basis
@@ -41,28 +49,32 @@ function compute_coulomb_vertex(
         callback,
     )
 
+    kpt = basis.kpoints[1]
+    G_vectors = kpt.G_vectors
+
     # === Filter G vectors (Ecut_ratio) ===
     if Ecut_ratio !== nothing
         # reduce the plane wave cutoff
         # this only works for Gamma-only now
         Ecut_reduced = basis.Ecut * Ecut_ratio
-        kpt = basis.kpoints[1]
         model = basis.model
         G_mask =
-            [sum(abs2, model.recip_lattice * G) / 2 <= Ecut_reduced for G in kpt.G_vectors]
+            [sum(abs2, model.recip_lattice * G) / 2 <= Ecut_reduced for G in G_vectors]
         G_indices = findall(G_mask)
         nG_reduced = length(G_indices)
         nk1, nb1, nk2, nb2, nG = size(ΓmnG)
         ΓmnG_reduced = zeros(eltype(ΓmnG), nk1, nb1, nk2, nb2, nG_reduced)
         ΓmnG_reduced[:, :, :, :, :] = ΓmnG[:, :, :, :, G_indices]
         ΓmnG = ΓmnG_reduced
+        G_vectors = G_vectors[G_indices]
     end
 
-    if !isnothing(compression)
-        return compress_coulomb_vertex(ΓmnG, compression)
-    end
+    # === Evaluate Interaction Kernel ===
+    vG_full = DFTK.compute_kernel_fourier(interaction_kernel, basis; q=zeros(3))
+    G_to_idx = Dict(basis.kpoints[1].G_vectors[i] => i for i = 1:length(basis.kpoints[1].G_vectors))
+    kernel_fourier = [vG_full[G_to_idx[G]] for G in G_vectors]
 
-    ΓmnG
+    return ΓmnG, G_vectors, kernel_fourier
 end
 
 # This function initially based on code of the experimental "cc4s" branch in DFTK written by Michael Herbst
@@ -150,6 +162,8 @@ H = - \Gamma^\dagger \Gamma = U \Lambda U^\dagger
 ```    
 The compressed $\Gamma$ is then obtained via $\Gamma_\text{compressed} = \Gamma U$,
 where the columns of $U$ are restricted such that $\lambda >$ `thresh`.
+
+Returns a tuple `(ΓmnF, coulomb_vertex_singular_vectors)`, where `coulomb_vertex_singular_vectors` is the applied transformation matrix.
 """
 Base.@kwdef struct CoulombGramian
     thresh::Float64 = 1e-6
@@ -166,10 +180,10 @@ function compress_coulomb_vertex(
     λ, U = eigen(H)                      # diagonalize
     NF = findlast(s -> abs(s) > thresh, λ)  # truncate based on thresh
     if isnothing(NF)
-        ΓmnG
+        return ΓmnG, LinearAlgebra.I(size(Γmat, 2))
     else
         ΓmnF = Γmat * U[:, 1:NF]           # rotate
-        reshape(ΓmnF, size(ΓmnG)[1:4]..., NF)
+        return reshape(ΓmnF, size(ΓmnG)[1:4]..., NF), U[:, 1:NF]
     end
 end
 
@@ -191,6 +205,8 @@ H = -\tilde \Gamma^\dagger \tilde \Gamma = U \Lambda U^\dagger
 ```    
 where $\tilde \Gamma = \Gamma Q$. 
 The compressed $\Gamma$ is then obtained via $\Gamma_\text{compressed} = \tilde \Gamma U$.
+
+Returns a tuple `(ΓmnF, coulomb_vertex_singular_vectors)`, where `coulomb_vertex_singular_vectors` is the effective transformation matrix.
 
 The dimension $N_F$ is found by a preceding adaptive range finder. 
 This finder iteratively increases the columns of Q (i.e. $N_F$) in steps of $2\sqrt{N_{pp}}$ 
@@ -274,9 +290,10 @@ function compress_coulomb_vertex(
     λ, U = eigen(H)                         # diagonalize
     NF = findlast(s -> abs(s) > thresh, λ)  # truncate based on thresh
     if isnothing(NF)
-        ΓmnG
+        return ΓmnG, LinearAlgebra.I(size(Γmat, 2))
     else
+        coulomb_vertex_singular_vectors = Q * U[:, 1:NF]
         ΓmnF = Γ_proj * U[:, 1:NF]           # rotate
-        reshape(ΓmnF, size(ΓmnG)[1:4]..., NF)
+        return reshape(ΓmnF, size(ΓmnG)[1:4]..., NF), coulomb_vertex_singular_vectors
     end
 end
