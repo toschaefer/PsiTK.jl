@@ -14,9 +14,9 @@ Enabling post-Hartree–Fock and beyond-DFT methods for 3D models under periodic
 
 ## Motivation
 
-While established electronic structure codes (VASP, Quantum Espresso, ABINIT, CP2K, ...) are highly optimized for production calculations, their monolithic architectures and accumulated historical complexity often create a high barrier to implementing new ideas.
+While established electronic structure codes under periodic boundary conditions (VASP, Quantum Espresso, CP2K, PySCF, ABINIT, GPAW, CASTEP, ...) offer extensive features, their monolithic architectures and accumulated historical complexity often create a high barrier to implementing new ideas.
 
-PsiTK fills this gap by providing a clean and readable codebase written in Julia. It is designed for quantum chemists and computational materials scientists seeking to bridge the gap between periodic Hartree-Fock and density functional theory and high-accuracy many-body methods. It avoids the heavy structure of massive software packages, allowing researchers to implement and test new ideas quickly, minimizing the distance between scientific intuition and executable code.
+PsiTK fills this gap by providing a clean, highly optimized, and fast codebase written in Julia. It is designed for quantum chemists and computational materials scientists seeking to bridge the gap between periodic Hartree-Fock and density functional theory and high-accuracy many-body methods. It avoids the heavy structure of massive software packages, allowing researchers to implement and test new ideas quickly, minimizing the distance between scientific intuition and highly performant executable code.
 
 ## Development Trajectory
 
