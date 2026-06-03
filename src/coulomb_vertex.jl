@@ -16,9 +16,11 @@ v(\bm G) = \sqrt{\frac{4π}{\bm G^2}}
 ```
 
 # Arguments
-- `active_space`: the active orbital space 
+- `bra_space`: the bra orbital space (e.g. occupied space)
+- `ket_space`: the ket orbital space (e.g. virtual space)
 - `interaction_kernel`: the DFTK interaction kernel to use (default: Coulomb)
-- `n_bands`: number of bands to be considered
+- `n_bands_bra`: number of bands to be considered from bra_space
+- `n_bands_ket`: number of bands to be considered from ket_space
 - `Ecut_ratio`: ratio to reduce the plane-wave cutoff for the vertex (default: 2/3)
 
 # Returns
@@ -28,24 +30,32 @@ A tuple `(ΓmnG, G_vectors, kernel_fourier)`:
 - `kernel_fourier`: the evaluated interaction kernel at the returned G vectors.
 """
 function compute_coulomb_vertex(
-    active_space::OrbitalSpace;
+    bra_space::OrbitalSpace,
+    ket_space::OrbitalSpace;
     interaction_kernel = DFTK.Coulomb(DFTK.ProbeCharge()),
-    n_bands = size(active_space.ψ[1], 2),
+    n_bands_bra = size(bra_space.ψ[1], 2),
+    n_bands_ket = size(ket_space.ψ[1], 2),
     Ecut_ratio = 2/3,
 )
-    basis = active_space.basis
+    basis = bra_space.basis
     nk = length(basis.kpoints)
 
     # === set up callback ===
-    total_steps = (n_bands*(n_bands+1)÷2)*nk^2 # only upper triangle of ΓmnG
+    if bra_space === ket_space
+        total_steps = (n_bands_bra*(n_bands_bra+1)÷2)*nk^2 # only upper triangle of ΓmnG
+    else
+        total_steps = n_bands_bra * n_bands_ket * nk^2
+    end
     callback = make_coulomb_vertex_callback(total_steps)
 
     # === compute Coulomb Vertex ===
     ΓmnG = _compute_coulomb_vertex(
         basis,
         interaction_kernel,
-        active_space.ψ;
-        n_bands,
+        bra_space.ψ,
+        ket_space.ψ;
+        n_bands_bra,
+        n_bands_ket,
         callback,
     )
 
@@ -77,12 +87,18 @@ function compute_coulomb_vertex(
     return ΓmnG, G_vectors, kernel_fourier
 end
 
+function compute_coulomb_vertex(space::OrbitalSpace; n_bands = size(space.ψ[1], 2), kwargs...)
+    return compute_coulomb_vertex(space, space; n_bands_bra=n_bands, n_bands_ket=n_bands, kwargs...)
+end
+
 # This function initially based on code of the experimental "cc4s" branch in DFTK written by Michael Herbst
 function _compute_coulomb_vertex(
     basis,
     interaction_kernel,
-    ψ::AbstractVector{<:AbstractArray{T}};
-    n_bands = size(ψ[1], 2),
+    ψ_bra::AbstractVector{<:AbstractArray{T}},
+    ψ_ket::AbstractVector{<:AbstractArray{T}};
+    n_bands_bra = size(ψ_bra[1], 2),
+    n_bands_ket = size(ψ_ket[1], 2),
     callback = nothing,
 ) where {T}
     kpt = basis.kpoints[1]
@@ -95,7 +111,9 @@ function _compute_coulomb_vertex(
     idx_minus_G = [G_to_idx[-Gs[i]] for i = 1:n_G]
 
     # allocate coulomb vertex
-    ΓmnG = zeros(complex(T), n_kpt, n_bands, n_kpt, n_bands, n_G)
+    ΓmnG = zeros(complex(T), n_kpt, n_bands_bra, n_kpt, n_bands_ket, n_G)
+
+    is_symmetric = (ψ_bra === ψ_ket)
 
     # TODO:
     # Idea is to make some outer loop over the m-slices
@@ -104,25 +122,25 @@ function _compute_coulomb_vertex(
     # end
 
     # === Calculate Coulomb Vertex ΓmnG ===
-    @views for (ikn, kptn) in enumerate(basis.kpoints), n = 1:n_bands
+    @views for (ikn, kptn) in enumerate(basis.kpoints), n = 1:n_bands_ket
         # Prepare ψnk(r)
-        ψnk_real = ifft(basis, kptn, ψ[ikn][:, n])
+        ψnk_real = ifft(basis, kptn, ψ_ket[ikn][:, n])
 
         for (ikm, kptm) in enumerate(basis.kpoints)
             # Compute momentum transfer q and Coulomb kernel
             q = kptn.coordinate - kptm.coordinate
             kernel_sqrt = sqrt.(DFTK.compute_kernel_fourier(interaction_kernel, basis; q))
 
-            for m = 1:n_bands
-                # Compute upper triangle only (m <= n)
+            for m = 1:n_bands_bra
+                # Compute upper triangle only (m <= n) if spaces are symmetric
                 # The lower triangle is filled via Hermitian conjugation below.
-                if m > n
+                if is_symmetric && m > n
                     continue
                 end
 
                 # Prepare ψmk(r) 
                 # TODO: pre-calculate some of them (not all because virtual space can be large)
-                ψmk_real = ifft(basis, kptm, ψ[ikm][:, m])
+                ψmk_real = ifft(basis, kptm, ψ_bra[ikm][:, m])
 
                 # Calcualte overlap density ρ_nm(r) = ψm*(r)ψn(r) and FFT to reciprocal space
                 overlap_density = fft(basis, kptn, conj.(ψmk_real) .* ψnk_real)
@@ -131,7 +149,7 @@ function _compute_coulomb_vertex(
                 ΓmnG[ikm, m, ikn, n, :] .= kernel_sqrt .* overlap_density
 
                 # Fill lower triangle via Γmn(-G) = conjg(ΓnmG)
-                if m != n
+                if is_symmetric && m != n
                     #value = ΓmnG[ikm, m, ikn, n, :]
                     #ΓmnG[ikn, n, ikm, m, :] .= conj.(@view value[idx_minus_G])
                     ΓmnG[ikn, n, ikm, m, :] .=
