@@ -61,8 +61,9 @@ function write_eigenenergies(
     εF::Number;
     force = false,
 )
-    @assert length(eigenvalues) == 1
-    εk = eigenvalues[1]
+    # We currently focus only on one k-point (Gamma-point only)
+    ik = 1
+    εk = eigenvalues[ik]
 
     # Note: Eigenenergies need to be ordered in *non-decreasing* order for cc4s !
     @assert maximum(abs, sort(εk) - εk) < 1e-10
@@ -126,8 +127,10 @@ function dump_cc4s_files(
     eigenvalues = active_space.eigenvalues
     εF = active_space.εF  # Fermi level
 
+    # We currently focus only on one k-point (Gamma-point only)
+    ik = 1
     # Cc4s only supports gapped systems with integer occupancies
-    for occ in active_space.occupations[1]
+    for occ in active_space.occupations[ik]
         if !(occ ≈ 0.0 || occ ≈ 1.0 || occ ≈ 2.0)
             error("Cc4s interface requires integer occupancies. Fractional occupations detected.")
         end
@@ -139,8 +142,10 @@ function dump_cc4s_files(
     files_coul = write_coulomb_vertex(folder, ΓmnG; force)
 
     # --- Split space by Fermi Energy for Delta Integrals
-    idx_holes = findall(ε -> ε <= εF, eigenvalues[1])
-    idx_parts = findall(ε -> ε > εF, eigenvalues[1])
+    # We currently focus only on one k-point (Gamma-point only)
+    ik = 1
+    idx_holes = findall(ε -> ε <= εF, eigenvalues[ik])
+    idx_parts = findall(ε -> ε > εF, eigenvalues[ik])
 
     hole_space = select_orbitals(active_space, idx_holes)
     particle_space = select_orbitals(active_space, idx_parts)

@@ -33,10 +33,15 @@ function compute_coulomb_vertex(
     bra_space::OrbitalSpace,
     ket_space::OrbitalSpace;
     interaction_kernel = DFTK.Coulomb(DFTK.ProbeCharge()),
-    n_bands_bra = size(bra_space.ψ[1], 2),
-    n_bands_ket = size(ket_space.ψ[1], 2),
+    n_bands_bra = nothing,
+    n_bands_ket = nothing,
     Ecut_ratio = 2/3,
 )
+    # We currently focus only on one k-point (Gamma-point only)
+    ik = 1
+    n_bands_bra = isnothing(n_bands_bra) ? size(bra_space.ψ[ik], 2) : n_bands_bra
+    n_bands_ket = isnothing(n_bands_ket) ? size(ket_space.ψ[ik], 2) : n_bands_ket
+
     basis = bra_space.basis
     nk = length(basis.kpoints)
 
@@ -59,7 +64,9 @@ function compute_coulomb_vertex(
         callback,
     )
 
-    kpt = basis.kpoints[1]
+    # We currently focus only on one k-point (Gamma-point only)
+    ik = 1
+    kpt = basis.kpoints[ik]
     G_vectors = kpt.G_vectors
 
     # === Filter G vectors (Ecut_ratio) ===
@@ -81,13 +88,19 @@ function compute_coulomb_vertex(
 
     # === Evaluate Interaction Kernel ===
     vG_full = DFTK.compute_kernel_fourier(interaction_kernel, basis; q=zeros(3))
-    G_to_idx = Dict(basis.kpoints[1].G_vectors[i] => i for i = 1:length(basis.kpoints[1].G_vectors))
+    
+    # We currently focus only on one k-point (Gamma-point only)
+    ik = 1
+    G_to_idx = Dict(basis.kpoints[ik].G_vectors[i] => i for i = 1:length(basis.kpoints[ik].G_vectors))
     kernel_fourier = [vG_full[G_to_idx[G]] for G in G_vectors]
 
     return ΓmnG, G_vectors, kernel_fourier
 end
 
-function compute_coulomb_vertex(space::OrbitalSpace; n_bands = size(space.ψ[1], 2), kwargs...)
+function compute_coulomb_vertex(space::OrbitalSpace; n_bands = nothing, kwargs...)
+    # We currently focus only on one k-point (Gamma-point only)
+    ik = 1
+    n_bands = isnothing(n_bands) ? size(space.ψ[ik], 2) : n_bands
     return compute_coulomb_vertex(space, space; n_bands_bra=n_bands, n_bands_ket=n_bands, kwargs...)
 end
 
@@ -97,11 +110,16 @@ function _compute_coulomb_vertex(
     interaction_kernel,
     ψ_bra::AbstractVector{<:AbstractArray{T}},
     ψ_ket::AbstractVector{<:AbstractArray{T}};
-    n_bands_bra = size(ψ_bra[1], 2),
-    n_bands_ket = size(ψ_ket[1], 2),
+    n_bands_bra = nothing,
+    n_bands_ket = nothing,
     callback = nothing,
 ) where {T}
-    kpt = basis.kpoints[1]
+    # We currently focus only on one k-point (Gamma-point only)
+    ik = 1
+    n_bands_bra = isnothing(n_bands_bra) ? size(ψ_bra[ik], 2) : n_bands_bra
+    n_bands_ket = isnothing(n_bands_ket) ? size(ψ_ket[ik], 2) : n_bands_ket
+
+    kpt = basis.kpoints[ik]
     n_G = length(G_vectors(basis, kpt))
     n_kpt = length(basis.kpoints)
 

@@ -1,4 +1,3 @@
-export compute_delta_integrals
 
 function _ifft_matrix(basis, kpt, ψ_mat)
     N_grid = prod(basis.fft_size)
@@ -25,8 +24,10 @@ For perfectly orthonormal orbitals and an infinitely dense grid, this evaluates 
 function compute_delta_integrals(holes::OrbitalSpace, ::Val{:HH})
     basis = holes.basis
     
+    # We currently focus only on one k-point (Gamma-point only)
+    ik = 1
     # Transform holes to real space and flatten spatial dimensions
-    ψ_holes_real_flat = _ifft_matrix(basis, basis.kpoints[1], holes.ψ[1])
+    ψ_holes_real_flat = _ifft_matrix(basis, basis.kpoints[ik], holes.ψ[ik])
     
     # DeltaIntegrals_ij = sum_r ψ_i^*(r) ψ_j(r) * dvol
     DeltaIntegralsHH = (ψ_holes_real_flat' * ψ_holes_real_flat) .* basis.dvol
@@ -49,12 +50,14 @@ The returned tensor has the dimensions ``(N_{\\text{particles}}, N_{\\text{parti
 function compute_delta_integrals(particles::OrbitalSpace, holes::OrbitalSpace, ::Val{:PPHH})
     basis = holes.basis
     
-    ψ_holes_real_flat = _ifft_matrix(basis, basis.kpoints[1], holes.ψ[1])
-    ψ_particles_real_flat = _ifft_matrix(basis, basis.kpoints[1], particles.ψ[1])
+    # We currently focus only on one k-point (Gamma-point only)
+    ik = 1
+    ψ_holes_real_flat = _ifft_matrix(basis, basis.kpoints[ik], holes.ψ[ik])
+    ψ_particles_real_flat = _ifft_matrix(basis, basis.kpoints[ik], particles.ψ[ik])
     
     N_grid = prod(basis.fft_size)
-    N_holes = size(holes.ψ[1], 2)
-    N_particles = size(particles.ψ[1], 2)
+    N_holes = size(holes.ψ[ik], 2)
+    N_particles = size(particles.ψ[ik], 2)
     
     # We want DeltaIntegrals_abij = sum_r ψ_a^*(r) ψ_b^*(r) ψ_i(r) ψ_j(r) * dvol
     # For efficiency with BLAS, we form pairs:

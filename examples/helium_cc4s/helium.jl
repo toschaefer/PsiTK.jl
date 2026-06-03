@@ -48,7 +48,6 @@ function main()
     println("Compute DSVs")
     target = DensitySpecificVirtuals(scfres_hf, occ_space; n_orbitals=44)
     dsv_space = generate_orbitals(target, occ_space)
-    println(dsv_space.eigenvalues)
 
     # Merge spaces to create the Active Space using lazy views to save memory
     println("Merge spaces")
@@ -61,12 +60,20 @@ function main()
     # Compute the Coulomb Vertex for the Active Space
     println("Compute Coulomb Vertex")
     ΓmnG, G_vectors, kernel_fourier = compute_coulomb_vertex(active_space)
-    vertex_alg = CoulombGramian()
-    ΓmnF, coulomb_vertex_singular_vectors = compress_coulomb_vertex(ΓmnG, vertex_alg)
+    compression_alg = CoulombGramian()
+    ΓmnF, coulomb_vertex_singular_vectors = compress_coulomb_vertex(ΓmnG, compression_alg)
 
     # Dump to the specific correlation solver (Cc4s)
     println("prepare and dump Cc4s files")
-    dump_cc4s_files(active_space, ΓmnF, G_vectors, kernel_fourier; coulomb_vertex_singular_vectors = coulomb_vertex_singular_vectors, folder = @__DIR__, force = true)
+    dump_cc4s_files(
+        active_space, 
+        ΓmnF, 
+        G_vectors, 
+        kernel_fourier; 
+        coulomb_vertex_singular_vectors, 
+        folder = @__DIR__, 
+        force = true
+    )
 
     println("done")
 end

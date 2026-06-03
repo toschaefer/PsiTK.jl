@@ -1,6 +1,3 @@
-export DensitySpecificVirtuals, CanonicalVirtuals, MaximalExchangeVirtuals
-export generate_orbitals
-
 using LinearAlgebra
 using DFTK
 
