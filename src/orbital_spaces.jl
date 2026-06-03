@@ -1,7 +1,6 @@
 export merge_spaces
 export canonicalize_orbitals
-export OccupiedOrbitals
-export IndexSelection
+export split_space_occupied_virtual, extract_occupied_space, extract_virtual_space
 export select_orbitals
 
 using LinearAlgebra
@@ -121,70 +120,59 @@ function canonicalize_orbitals(space::OrbitalSpace{B,T,R}, hamiltonian) where {B
     )
 end
 
-"""
-    OccupiedOrbitals(; threshold=1e-6)
 
-Algorithm to select the occupied subspace from an `OrbitalSpace` based on a given
-fractional occupation threshold.
+
 """
-Base.@kwdef struct OccupiedOrbitals
-    threshold::Float64 = 1e-6
+    split_space_occupied_virtual(space::OrbitalSpace; threshold=1e-6)
+
+Splits the given `space` into an occupied and an empty (virtual) `OrbitalSpace` based on the 
+fractional occupation `threshold`.
+Returns a tuple `(occupied_space, virtual_space)`. Note that this allocates two new `OrbitalSpace` objects and copies the data. If you only need one, use `extract_occupied_space` or `extract_virtual_space`.
+"""
+function split_space_occupied_virtual(space::OrbitalSpace; threshold=1e-6)
+    masks = DFTK.occupied_empty_masks(space.occupations, threshold)
+    occ_space = select_orbitals(space, masks.mask_occ)
+    empty_space = select_orbitals(space, masks.mask_empty)
+    return occ_space, empty_space
 end
 
 """
-    IndexSelection(indices::AbstractVector{Int})
+    extract_occupied_space(space::OrbitalSpace; threshold=1e-6)
 
-Algorithm to select a specific set of orbitals by their index.
+Extracts the occupied subspace from the given `space` based on the fractional occupation `threshold`.
 """
-struct IndexSelection
-    indices::Vector{Int}
+function extract_occupied_space(space::OrbitalSpace; threshold=1e-6)
+    masks = DFTK.occupied_empty_masks(space.occupations, threshold)
+    return select_orbitals(space, masks.mask_occ)
 end
 
 """
-    select_orbitals(space::OrbitalSpace, alg::OccupiedOrbitals)
+    extract_virtual_space(space::OrbitalSpace; threshold=1e-6)
 
-Extracts the occupied orbitals from the given `space` where occupation > `alg.threshold`.
+Extracts the empty (virtual) subspace from the given `space` based on the fractional occupation `threshold`.
 """
-function select_orbitals(space::OrbitalSpace{B,T,R}, alg::OccupiedOrbitals) where {B,T,R}
-    ψ_occ = Matrix{T}[]
-    eigenvalues_occ = Vector{R}[]
-    occupations_occ = Vector{R}[]
-
-    for ik = 1:length(space.ψ)
-        occ = space.occupations[ik]
-
-        # Determine how many bands are occupied
-        n_occ = count(x -> x > alg.threshold, occ)
-
-        push!(ψ_occ, space.ψ[ik][:, 1:n_occ])
-        push!(eigenvalues_occ, space.eigenvalues[ik][1:n_occ])
-        push!(occupations_occ, space.occupations[ik][1:n_occ])
-    end
-
-    return OrbitalSpace{B,T,R}(
-        space.basis,
-        ψ_occ,
-        eigenvalues_occ,
-        occupations_occ,
-        space.εF,
-        space.is_orthonormal
-    )
+function extract_virtual_space(space::OrbitalSpace; threshold=1e-6)
+    masks = DFTK.occupied_empty_masks(space.occupations, threshold)
+    return select_orbitals(space, masks.mask_empty)
 end
 
 """
-    select_orbitals(space::OrbitalSpace, alg::IndexSelection)
+    select_orbitals(space::OrbitalSpace, indices)
 
 Extracts the orbitals from the given `space` at the specific indices.
+`indices` can either be a single `AbstractVector{Int}` (applied to all k-points),
+or an `AbstractVector{<:AbstractVector{Int}}` providing a specific list of indices for each k-point.
 """
-function select_orbitals(space::OrbitalSpace{B,T,R}, alg::IndexSelection) where {B,T,R}
+function select_orbitals(space::OrbitalSpace{B,T,R}, indices::AbstractVector{<:AbstractVector{Int}}) where {B,T,R}
+    @assert length(indices) == length(space.ψ)
     ψ_sel = Matrix{T}[]
     eigenvalues_sel = Vector{R}[]
     occupations_sel = Vector{R}[]
 
     for ik = 1:length(space.ψ)
-        push!(ψ_sel, space.ψ[ik][:, alg.indices])
-        push!(eigenvalues_sel, space.eigenvalues[ik][alg.indices])
-        push!(occupations_sel, space.occupations[ik][alg.indices])
+        push!(ψ_sel, space.ψ[ik][:, indices[ik]])
+        push!(eigenvalues_sel, space.eigenvalues[ik][indices[ik]])
+        push!(occupations_sel, space.occupations[ik][indices[ik]])
     end
 
     return OrbitalSpace{B,T,R}(
@@ -195,4 +183,9 @@ function select_orbitals(space::OrbitalSpace{B,T,R}, alg::IndexSelection) where 
         space.εF,
         space.is_orthonormal
     )
+end
+
+function select_orbitals(space::OrbitalSpace, indices::AbstractVector{Int})
+    # Apply the same indices to all k-points
+    return select_orbitals(space, [indices for _ in 1:length(space.ψ)])
 end

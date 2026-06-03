@@ -41,16 +41,14 @@ function main()
     )
 
     # Extract the base OrbitalSpace from the HF result
+    # (we want to use the full cc-pVDZ basis, but need to extract the occupied subspace first)
     scf_space = OrbitalSpace(scfres_hf)
+    occ_space, virt_space = split_space_occupied_virtual(scf_space; threshold = 1e-6)
 
-    # Select the occupied subspace
-    occ_space = select_orbitals(scf_space, OccupiedOrbitals(threshold = 1e-6))
-
-    # Generate a generalized set of orbitals (e.g., 32 DSVs)
+    # Generate a generalized set of orbitals (e.g., 44 DSVs)
     println("Compute DSVs")
-    dsv_alg = DensitySpecificVirtuals(44)
-    solver = LOBPCGEigensolver(tol=1e-6, maxiter=500)
-    dsv_space = generate_orbitals(dsv_alg, scfres_hf, occ_space, solver)
+    target = DensitySpecificVirtuals(scfres_hf, occ_space; n_orbitals=44)
+    dsv_space = generate_orbitals(target, occ_space)
     println(dsv_space.eigenvalues)
 
     # Merge spaces to create the Active Space using lazy views to save memory

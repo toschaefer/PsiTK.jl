@@ -41,19 +41,19 @@ using DFTK
 using PsiTK
 using PseudoPotentialData
 
-# 1. Run standard HF calculation in DFTK (assumes lattice, atoms, positions setup)
+# Run standard HF calculation in DFTK (assumes lattice, atoms, positions setup)
 model = model_HF(lattice, atoms, positions; exx_kernel=Coulomb(ProbeCharge()))
 basis = PlaneWaveBasis(model; Ecut=15, kgrid=[1, 1, 1])
 scfres = self_consistent_field(basis)
 
-occ_space = select_orbitals(OrbitalSpace(scfres), OccupiedOrbitals())
+# Use the occupied subspace only (if needed)
+occ_space = extract_occupied_space(OrbitalSpace(scfres))
 
-# 2. Generate Density Specific Virtuals using PsiTK
-target = DensitySpecificVirtuals(50)
-solver = LOBPCGEigensolver(tol=1e-6)
-dsv_space = generate_orbitals(target, scfres, occ_space, solver)
+# Generate Density Specific Virtuals using PsiTK
+target = DensitySpecificVirtuals(scfres, occ_space; n_orbitals=50)
+dsv_space = generate_orbitals(target, occ_space)
 
-# 3. Dump correlation tensors for Cc4s
+# Dump correlation tensors for Cc4s
 active_space = merge_spaces(occ_space, dsv_space)
 vertices = compute_coulomb_vertex(active_space)
 

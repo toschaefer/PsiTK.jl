@@ -80,45 +80,6 @@ function write_eigenenergies(
     )
 end
 
-
-# Write CoulombVertex.yaml and CoulombVertex.elements
-function write_coulomb_vertex(
-    folder::AbstractString,
-    ΓnmF::AbstractArray{T,5};
-    force = true,
-) where {T}
-    n_kpt = size(ΓnmF, 1)
-    n_bands = size(ΓnmF, 2)
-    n_aux_field = size(ΓnmF, 5)
-    @assert n_kpt == size(ΓnmF, 3)
-    @assert n_bands == size(ΓnmF, 4)
-    @assert n_kpt == 1  # 1 kpt is hard-coded for now (see write_eigenenergies)
-
-    dimensions = [
-        Dict("length" => n_aux_field, "type" => "AuxiliaryField"),
-        Dict("length" => n_kpt * n_bands, "type" => "State"),
-        Dict("length" => n_kpt * n_bands, "type" => "State"),
-    ]
-    metaData = Dict("halfGrid" => 0)  # Complex integrals
-
-    # Cc4s is writte in C++
-    # C++ is row-major, julia is column-major. Therefore we write
-    # ΓnmF in a stream using chunks of all field Fs for given (n,m)
-    tensor_data = (
-        convert(Vector{Complex{Cdouble}}, vec(ΓnmF[1, n, 1, m, :])) 
-        for n = 1:n_bands for m = 1:n_bands
-    )
-
-    return write_cc4s_tensor(
-        folder, "CoulombVertex", tensor_data;
-        dimensions = dimensions,
-        scalarType = "Complex64",
-        elementType = "IeeeBinaryFile",
-        metaData = metaData,
-        force = force
-    )
-end
-
 """
     dump_cc4s_files(
         active_space::OrbitalSpace,
@@ -151,8 +112,8 @@ Write Cc4s input files (*.yaml and *.elements):
 function dump_cc4s_files(
     active_space::OrbitalSpace,
     ΓmnG::AbstractArray,
-    G_vectors::AbstractVector = SVector{3, Int}[],
-    kernel_fourier::AbstractVector = Float64[];
+    G_vectors::AbstractVector,
+    kernel_fourier::AbstractVector;
     coulomb_vertex_singular_vectors::Union{AbstractMatrix, Nothing} = nothing,
     folder::AbstractString = joinpath(pwd(), "cc4s"),
     force = false,
@@ -181,8 +142,8 @@ function dump_cc4s_files(
     idx_holes = findall(ε -> ε <= εF, eigenvalues[1])
     idx_parts = findall(ε -> ε > εF, eigenvalues[1])
 
-    hole_space = select_orbitals(active_space, IndexSelection(idx_holes))
-    particle_space = select_orbitals(active_space, IndexSelection(idx_parts))
+    hole_space = select_orbitals(active_space, idx_holes)
+    particle_space = select_orbitals(active_space, idx_parts)
 
     # --- dump DeltaIntegralsHH
     DeltaIntegralsHH = compute_delta_integrals(hole_space, Val(:HH))
@@ -226,15 +187,54 @@ function dump_cc4s_files(
     )
 
     # --- dump Grid Vectors
-    files_grid = isempty(G_vectors) ? String[] : write_grid_vectors(folder, active_space.basis, G_vectors; force)
+    files_grid = write_grid_vectors(folder, active_space.basis, G_vectors; force)
 
     # --- dump Coulomb Potential
-    files_pot = isempty(kernel_fourier) ? String[] : write_coulomb_potential(folder, kernel_fourier; force)
+    files_pot = write_coulomb_potential(folder, kernel_fourier; force)
 
     # --- dump Coulomb Vertex Singular Vectors
     files_u = isnothing(coulomb_vertex_singular_vectors) ? String[] : write_singular_vectors(folder, coulomb_vertex_singular_vectors; force)
 
     return vcat(files_ene, files_coul, files_hh, files_pphh, files_grid, files_pot, files_u)
+end
+
+
+# Write CoulombVertex.yaml and CoulombVertex.elements
+function write_coulomb_vertex(
+    folder::AbstractString,
+    ΓnmF::AbstractArray{T,5};
+    force = true,
+) where {T}
+    n_kpt = size(ΓnmF, 1)
+    n_bands = size(ΓnmF, 2)
+    n_aux_field = size(ΓnmF, 5)
+    @assert n_kpt == size(ΓnmF, 3)
+    @assert n_bands == size(ΓnmF, 4)
+    @assert n_kpt == 1  # 1 kpt is hard-coded for now (see write_eigenenergies)
+
+    dimensions = [
+        Dict("length" => n_aux_field, "type" => "AuxiliaryField"),
+        Dict("length" => n_kpt * n_bands, "type" => "State"),
+        Dict("length" => n_kpt * n_bands, "type" => "State"),
+    ]
+    metaData = Dict("halfGrid" => 0)  # Complex integrals
+
+    # Cc4s is writte in C++
+    # C++ is row-major, julia is column-major. Therefore we write
+    # ΓnmF in a stream using chunks of all field Fs for given (n,m)
+    tensor_data = (
+        convert(Vector{Complex{Cdouble}}, vec(ΓnmF[1, n, 1, m, :])) 
+        for n = 1:n_bands for m = 1:n_bands
+    )
+
+    return write_cc4s_tensor(
+        folder, "CoulombVertex", tensor_data;
+        dimensions = dimensions,
+        scalarType = "Complex64",
+        elementType = "IeeeBinaryFile",
+        metaData = metaData,
+        force = force
+    )
 end
 
 # Write GridVectors.yaml and GridVectors.elements

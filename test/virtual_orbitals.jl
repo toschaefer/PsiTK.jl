@@ -5,7 +5,7 @@
 
     scfres = TestSystems.setup_h_chain_hf(; Ecut=15)
     basis = scfres.basis
-    occ_space = select_orbitals(OrbitalSpace(scfres), OccupiedOrbitals())
+    occ_space = extract_occupied_space(OrbitalSpace(scfres))
     Nfull = length(basis.kpoints[1].G_vectors)
     Nocc = size(occ_space.ψ[1], 2)
     N_virt_target = 12
@@ -16,8 +16,8 @@
     solver_fd = FullDiagonalizationEigensolver()
     
     # Test N_virt = :all
-    target_canon_all = CanonicalVirtuals(:all)
-    virt_canon_fd_all = generate_orbitals(target_canon_all, scfres, occ_space, solver_fd)
+    target_canon_all = CanonicalVirtuals(scfres; n_orbitals = :all)
+    virt_canon_fd_all = generate_orbitals(target_canon_all, occ_space, solver_fd)
     
     @test size(virt_canon_fd_all.ψ[1]) == (Nfull, Nfull - Nocc)
     @test virt_canon_fd_all.ψ[1]' * virt_canon_fd_all.ψ[1] ≈ I
@@ -30,8 +30,8 @@
     @test diag(H_v) ≈ virt_canon_fd_all.eigenvalues[1]
 
     # Test N_virt
-    target_canon = CanonicalVirtuals(N_virt_target)
-    virt_canon_fd = generate_orbitals(target_canon, scfres, occ_space, solver_fd)
+    target = CanonicalVirtuals(scfres; n_orbitals = N_virt_target)
+    virt_canon_fd = generate_orbitals(target, occ_space, solver_fd)
     
     @test size(virt_canon_fd.ψ[1]) == (Nfull, N_virt_target)
     @test virt_canon_fd.ψ[1]' * virt_canon_fd.ψ[1] ≈ I
@@ -43,7 +43,7 @@
     # 2. Test CanonicalVirtuals (LOBPCG)
     # ---------------------------------------------------------
     solver_lobpcg = LOBPCGEigensolver(tol=1e-7, maxiter=500)
-    virt_canon_lobpcg = generate_orbitals(target_canon, scfres, occ_space, solver_lobpcg)
+    virt_canon_lobpcg = generate_orbitals(target, occ_space, solver_lobpcg)
     
     @test size(virt_canon_lobpcg.ψ[1]) == (Nfull, N_virt_target)
     @test virt_canon_lobpcg.ψ[1]' * virt_canon_lobpcg.ψ[1] ≈ I
@@ -56,10 +56,10 @@
     # ---------------------------------------------------------
     # 3. Test DensitySpecificVirtuals
     # ---------------------------------------------------------
-    target_dsv = DensitySpecificVirtuals(N_virt_target)
+    target = DensitySpecificVirtuals(scfres, occ_space; n_orbitals = N_virt_target)
     
     # Run once
-    virt_dsv_1 = generate_orbitals(target_dsv, scfres, occ_space, solver_lobpcg)
+    virt_dsv_1 = generate_orbitals(target, occ_space, solver_lobpcg)
     
     @test size(virt_dsv_1.ψ[1]) == (Nfull, N_virt_target)
     @test virt_dsv_1.is_orthonormal == false
