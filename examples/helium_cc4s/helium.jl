@@ -42,7 +42,7 @@ function main()
 
     # Extract the base OrbitalSpace from the HF result
     scf_space = OrbitalSpace(scfres_hf)
-    occ_space, virt_space = split_space_occupied_virtual(scf_space; threshold = 1e-6)
+    occ_space, _ = split_space_occupied_virtual(scf_space; threshold = 1e-6)
 
     # Generate a generalized set of orbitals (e.g., 44 DSVs)
     println("Compute DSVs")
@@ -56,7 +56,7 @@ function main()
 
     # Canonicalize the active space (diagonalize the Fock Hamiltonian)
     println("Canonicalize Active Space")
-    active_space = canonicalize_orbitals(active_space, scfres_hf.ham)
+    active_space = diagonalize_orbitals(active_space, scfres_hf.ham)
 
     # Compute the Coulomb Vertex for the Active Space
     println("Compute Coulomb Vertex")

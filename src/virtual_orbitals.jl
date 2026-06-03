@@ -31,7 +31,7 @@ where $\mathcal K$ and $h$ are the Fock exchange operator and the Fock Hamiltoni
 
 When generated, the orbitals returned ($\varphi_i$) will directly span the DSV subspace. 
 These orbitals will NOT be strictly orthogonalized initially, ensuring their orbital energies strictly match the generalized Rayleigh quotient ($\lambda_i = \langle \varphi_i | \mathcal K | \varphi_i \rangle / \langle \varphi_i | \mathcal h | \varphi_i \rangle$).
-They can be orthonormalized and canonicalized later using `canonicalize_orbitals`.
+They can be orthonormalized and canonicalized later using `diagonalize_orbitals`.
 """
 struct DensitySpecificVirtuals{TH, TK}
     n_orbitals::Int

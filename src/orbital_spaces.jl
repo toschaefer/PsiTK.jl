@@ -1,11 +1,10 @@
 export merge_spaces
-export canonicalize_orbitals
+export OrbitalSpace, diagonalize_orbitals
 export split_space_occupied_virtual, extract_occupied_space, extract_virtual_space
 export select_orbitals
 
 using LinearAlgebra
 
-export OrbitalSpace
 
 """
     OrbitalSpace{B, T, R <: Real}
@@ -82,12 +81,12 @@ function merge_spaces(spaces::OrbitalSpace{B,T,R}...) where {B,T,R}
 end
 
 """
-    canonicalize_orbitals(space::OrbitalSpace, hamiltonian)
+    diagonalize_orbitals(space::OrbitalSpace, hamiltonian)
 
 Diagonalizes the Fock Hamiltonian in the subspace defined by `space.ψ` to
 return canonicalized, orthogonal eigenstates.
 """
-function canonicalize_orbitals(space::OrbitalSpace{B,T,R}, hamiltonian) where {B,T,R}
+function diagonalize_orbitals(space::OrbitalSpace{B,T,R}, hamiltonian) where {B,T,R}
     ψ_canon = Matrix{T}[]
     eigenvalues_canon = Vector{R}[]
 
