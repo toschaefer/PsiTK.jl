@@ -41,7 +41,6 @@ function main()
     )
 
     # Extract the base OrbitalSpace from the HF result
-    # (we want to use the full cc-pVDZ basis, but need to extract the occupied subspace first)
     scf_space = OrbitalSpace(scfres_hf)
     occ_space, virt_space = split_space_occupied_virtual(scf_space; threshold = 1e-6)
 
