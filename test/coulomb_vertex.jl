@@ -41,8 +41,8 @@
     compute_overlap_densities(space; n_bands = nbands, callback = info -> push!(steps, info.step))
     @test steps == 1:(nbands * (nbands + 1) ÷ 2)
 
-    # Full grid without cutoff reduction
-    ρ_full, G_full = compute_overlap_densities(space; n_bands = nbands, Ecut_ratio = nothing)
+    # Default Ecut_ratio = 1.0 reproduces the full plane-wave grid of the basis
+    ρ_full, G_full = compute_overlap_densities(space; n_bands = nbands)
     @test length(G_full) == length(scfres.basis.kpoints[1].G_vectors)
     @test size(ρ_full, 5) > size(ρmnG, 5)
 

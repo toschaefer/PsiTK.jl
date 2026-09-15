@@ -19,8 +19,8 @@ Compute the overlap densities in reciprocal space
 - `ket_space`: the ket orbital space (e.g. virtual space)
 - `n_bands_bra`: number of bands to be considered from bra_space
 - `n_bands_ket`: number of bands to be considered from ket_space
-- `Ecut_ratio`: ratio to reduce the plane-wave cutoff for the densities (default: 1.0),
-  `nothing` keeps the full plane-wave grid
+- `Ecut_ratio`: ratio to reduce the plane-wave cutoff for the densities
+  (default: 1.0, i.e. the full plane-wave grid of the basis)
 - `callback`: called after each orbital pair with `(; step, total_steps)`,
   e.g. `callback=ShowProgress()` for a progress bar (default: no output)
 
@@ -60,7 +60,6 @@ end
 # (Gamma-only for now)
 function _G_indices_within_cutoff(basis, Ecut_ratio)
     Gs = G_vectors(basis, basis.kpoints[1])
-    isnothing(Ecut_ratio) && return eachindex(Gs)
     recip_lattice = basis.model.recip_lattice
     Ecut_reduced = basis.Ecut * Ecut_ratio
     return findall(G -> sum(abs2, recip_lattice * G) / 2 <= Ecut_reduced, Gs)
