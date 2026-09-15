@@ -1,18 +1,96 @@
 @doc raw"""
+    compute_overlap_densities(
+        bra_space::OrbitalSpace,
+        ket_space::OrbitalSpace;
+        n_bands_bra=size(bra_space.ψ[1], 2),
+        n_bands_ket=size(ket_space.ψ[1], 2),
+        Ecut_ratio=1.0
+    )
+    compute_overlap_densities(space::OrbitalSpace; n_bands=size(space.ψ[1], 2), kwargs...)
+
+Compute the overlap densities in reciprocal space
+```math
+ρ_{mn \bm G} = \int_Ω \; \psi_{m}(\bm r)^∗ \psi_{n}(\bm r)  \; e^{-i\bm r \bm G}  \; d^3 r
+```
+
+# Arguments
+- `bra_space`: the bra orbital space (e.g. occupied space)
+- `ket_space`: the ket orbital space (e.g. virtual space)
+- `n_bands_bra`: number of bands to be considered from bra_space
+- `n_bands_ket`: number of bands to be considered from ket_space
+- `Ecut_ratio`: ratio to reduce the plane-wave cutoff for the densities (default: 1.0),
+  `nothing` keeps the full plane-wave grid
+
+# Returns
+A tuple `(ρmnG, G_vectors)`:
+- `ρmnG`: the overlap densities as a tensor of shape `(nk, n_bands_bra, nk, n_bands_ket, nG)`.
+- `G_vectors`: the corresponding plane-wave vectors.
+"""
+function compute_overlap_densities(
+    bra_space::OrbitalSpace,
+    ket_space::OrbitalSpace;
+    n_bands_bra = size(bra_space.ψ[1], 2),
+    n_bands_ket = size(ket_space.ψ[1], 2),
+    Ecut_ratio = 1.0,
+)
+    basis = bra_space.basis
+    nk = length(basis.kpoints)
+
+    # === set up callback ===
+    if bra_space === ket_space
+        total_steps = (n_bands_bra*(n_bands_bra+1)÷2)*nk^2 # only upper triangle of ρmnG
+    else
+        total_steps = n_bands_bra * n_bands_ket * nk^2
+    end
+    callback = make_coulomb_vertex_callback(total_steps)
+
+    G_indices = _G_indices_within_cutoff(basis, Ecut_ratio)
+    ρmnG = _compute_overlap_densities(
+        basis,
+        bra_space.ψ,
+        ket_space.ψ;
+        n_bands_bra,
+        n_bands_ket,
+        G_indices,
+        callback,
+    )
+
+    return ρmnG, G_vectors(basis, basis.kpoints[1])[G_indices]
+end
+
+function compute_overlap_densities(space::OrbitalSpace; n_bands = size(space.ψ[1], 2), kwargs...)
+    return compute_overlap_densities(space, space; n_bands_bra=n_bands, n_bands_ket=n_bands, kwargs...)
+end
+
+# Indices of the G vectors of the first k-point within the reduced cutoff Ecut * Ecut_ratio
+# (Gamma-only for now)
+function _G_indices_within_cutoff(basis, Ecut_ratio)
+    Gs = G_vectors(basis, basis.kpoints[1])
+    isnothing(Ecut_ratio) && return eachindex(Gs)
+    recip_lattice = basis.model.recip_lattice
+    Ecut_reduced = basis.Ecut * Ecut_ratio
+    return findall(G -> sum(abs2, recip_lattice * G) / 2 <= Ecut_reduced, Gs)
+end
+
+@doc raw"""
     compute_coulomb_vertex(
-        active_space::OrbitalSpace;
+        bra_space::OrbitalSpace,
+        ket_space::OrbitalSpace;
         interaction_kernel=DFTK.Coulomb(DFTK.ProbeCharge()),
-        n_bands=size(active_space.ψ[1], 2),
+        n_bands_bra=size(bra_space.ψ[1], 2),
+        n_bands_ket=size(ket_space.ψ[1], 2),
         Ecut_ratio=2/3
     )
+    compute_coulomb_vertex(space::OrbitalSpace; n_bands=size(space.ψ[1], 2), kwargs...)
 
 Compute the Coulomb vertex
 ```math
-Γ_{mn \bm G} = \int_Ω  \; \sqrt{v(\bm G)} \; \psi_{m}(\bm r)^∗ \psi_{n}(\bm r)  \; e^{-i\bm r \bm G}  \; d^3 r
+Γ_{mn \bm G} = \sqrt{v(\bm G)} \; ρ_{mn \bm G}
 ```
-where $v(\bm G)$ is the Coulomb potential, e.g.
+where $ρ_{mn \bm G}$ are the overlap densities (see [`compute_overlap_densities`](@ref))
+and $v(\bm G)$ is the interaction kernel, e.g. the Coulomb potential
 ```math
-v(\bm G) = \sqrt{\frac{4π}{\bm G^2}}
+v(\bm G) = \frac{4π}{\bm G^2}
 ```
 
 # Arguments
@@ -37,52 +115,21 @@ function compute_coulomb_vertex(
     n_bands_ket = size(ket_space.ψ[1], 2),
     Ecut_ratio = 2/3,
 )
-    basis = bra_space.basis
-    nk = length(basis.kpoints)
-
-    # === set up callback ===
-    if bra_space === ket_space
-        total_steps = (n_bands_bra*(n_bands_bra+1)÷2)*nk^2 # only upper triangle of ΓmnG
-    else
-        total_steps = n_bands_bra * n_bands_ket * nk^2
-    end
-    callback = make_coulomb_vertex_callback(total_steps)
-
-    # === compute Coulomb Vertex ===
-    ΓmnG = _compute_coulomb_vertex(
-        basis,
-        interaction_kernel,
-        bra_space.ψ,
-        ket_space.ψ;
+    ρmnG, G_vectors = compute_overlap_densities(
+        bra_space,
+        ket_space;
         n_bands_bra,
         n_bands_ket,
-        callback,
+        Ecut_ratio,
     )
 
-    kpt = basis.kpoints[1]
-    G_vectors = kpt.G_vectors
+    basis = bra_space.basis
+    G_indices = _G_indices_within_cutoff(basis, Ecut_ratio)
+    kernel_fourier = DFTK.compute_kernel_fourier(interaction_kernel, basis)[G_indices]
 
-    # === Filter G vectors (Ecut_ratio) ===
-    if Ecut_ratio !== nothing
-        # reduce the plane wave cutoff
-        # this only works for Gamma-only now
-        Ecut_reduced = basis.Ecut * Ecut_ratio
-        model = basis.model
-        G_mask =
-            [sum(abs2, model.recip_lattice * G) / 2 <= Ecut_reduced for G in G_vectors]
-        G_indices = findall(G_mask)
-        nG_reduced = length(G_indices)
-        nk1, nb1, nk2, nb2, nG = size(ΓmnG)
-        ΓmnG_reduced = zeros(eltype(ΓmnG), nk1, nb1, nk2, nb2, nG_reduced)
-        ΓmnG_reduced[:, :, :, :, :] = ΓmnG[:, :, :, :, G_indices]
-        ΓmnG = ΓmnG_reduced
-        G_vectors = G_vectors[G_indices]
-    end
-
-    # === Evaluate Interaction Kernel ===
-    vG_full = DFTK.compute_kernel_fourier(interaction_kernel, basis; q=zeros(3))
-    G_to_idx = Dict(basis.kpoints[1].G_vectors[i] => i for i = 1:length(basis.kpoints[1].G_vectors))
-    kernel_fourier = [vG_full[G_to_idx[G]] for G in G_vectors]
+    # Γ = √v ⊙ ρ along the G axis; ρmnG is not needed anymore, so scale in place
+    ΓmnG = ρmnG
+    ΓmnG .*= reshape(sqrt.(kernel_fourier), 1, 1, 1, 1, :)
 
     return ΓmnG, G_vectors, kernel_fourier
 end
@@ -92,26 +139,25 @@ function compute_coulomb_vertex(space::OrbitalSpace; n_bands = size(space.ψ[1],
 end
 
 # This function initially based on code of the experimental "cc4s" branch in DFTK written by Michael Herbst
-function _compute_coulomb_vertex(
+function _compute_overlap_densities(
     basis,
-    interaction_kernel,
     ψ_bra::AbstractVector{<:AbstractArray{T}},
     ψ_ket::AbstractVector{<:AbstractArray{T}};
     n_bands_bra = size(ψ_bra[1], 2),
     n_bands_ket = size(ψ_ket[1], 2),
+    G_indices = eachindex(G_vectors(basis, basis.kpoints[1])),
     callback = nothing,
 ) where {T}
     kpt = basis.kpoints[1]
-    n_G = length(G_vectors(basis, kpt))
     n_kpt = length(basis.kpoints)
 
-    # === Create index to map G to -G ===
+    # === Create index to map each stored G to -G on the full grid ===
     Gs = G_vectors(basis, kpt)
-    G_to_idx = Dict(Gs[i] => i for i = 1:n_G)
-    idx_minus_G = [G_to_idx[-Gs[i]] for i = 1:n_G]
+    G_to_idx = Dict(Gs[i] => i for i in eachindex(Gs))
+    idx_minus_G = [G_to_idx[-Gs[i]] for i in G_indices]
 
-    # allocate coulomb vertex
-    ΓmnG = zeros(complex(T), n_kpt, n_bands_bra, n_kpt, n_bands_ket, n_G)
+    # allocate overlap densities
+    ρmnG = zeros(complex(T), n_kpt, n_bands_bra, n_kpt, n_bands_ket, length(G_indices))
 
     is_symmetric = (ψ_bra === ψ_ket)
 
@@ -121,16 +167,12 @@ function _compute_coulomb_vertex(
     #     precalculate ψmk_real for all m in this slice
     # end
 
-    # === Calculate Coulomb Vertex ΓmnG ===
+    # === Calculate overlap densities ρmnG ===
     @views for (ikn, kptn) in enumerate(basis.kpoints), n = 1:n_bands_ket
         # Prepare ψnk(r)
         ψnk_real = ifft(basis, kptn, ψ_ket[ikn][:, n])
 
         for (ikm, kptm) in enumerate(basis.kpoints)
-            # Compute momentum transfer q and Coulomb kernel
-            q = kptn.coordinate - kptm.coordinate
-            kernel_sqrt = sqrt.(DFTK.compute_kernel_fourier(interaction_kernel, basis; q))
-
             for m = 1:n_bands_bra
                 # Compute upper triangle only (m <= n) if spaces are symmetric
                 # The lower triangle is filled via Hermitian conjugation below.
@@ -138,22 +180,19 @@ function _compute_coulomb_vertex(
                     continue
                 end
 
-                # Prepare ψmk(r) 
+                # Prepare ψmk(r)
                 # TODO: pre-calculate some of them (not all because virtual space can be large)
                 ψmk_real = ifft(basis, kptm, ψ_bra[ikm][:, m])
 
                 # Calcualte overlap density ρ_nm(r) = ψm*(r)ψn(r) and FFT to reciprocal space
                 overlap_density = fft(basis, kptn, conj.(ψmk_real) .* ψnk_real)
 
-                # store entry of Coulomb Vertex 
-                ΓmnG[ikm, m, ikn, n, :] .= kernel_sqrt .* overlap_density
+                # store entry of the overlap densities
+                ρmnG[ikm, m, ikn, n, :] .= overlap_density[G_indices]
 
-                # Fill lower triangle via Γmn(-G) = conjg(ΓnmG)
+                # Fill lower triangle via ρmn(-G) = conjg(ρnmG)
                 if is_symmetric && m != n
-                    #value = ΓmnG[ikm, m, ikn, n, :]
-                    #ΓmnG[ikn, n, ikm, m, :] .= conj.(@view value[idx_minus_G])
-                    ΓmnG[ikn, n, ikm, m, :] .=
-                        conj.(view(ΓmnG, ikm, m, ikn, n, idx_minus_G))
+                    ρmnG[ikn, n, ikm, m, :] .= conj.(overlap_density[idx_minus_G])
                 end
 
                 # Callback
@@ -163,7 +202,7 @@ function _compute_coulomb_vertex(
             end
         end
     end
-    ΓmnG
+    ρmnG
 end
 
 
