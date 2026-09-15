@@ -6,6 +6,7 @@ using ProgressMeter
 using TimerOutputs
 using DFTK
 
+export ShowProgress
 include("callbacks.jl")
 
 # Core OrbitalSpace and API

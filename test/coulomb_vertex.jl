@@ -36,6 +36,11 @@
     idx_minus_G = [G_to_idx[-G] for G in G_vectors]
     @test ρmnG[1, 2, 1, 1, idx_minus_G] ≈ conj.(ρmnG[1, 1, 1, 2, :])
 
+    # Callback is called once per unique orbital pair (upper triangle for symmetric spaces)
+    steps = Int[]
+    compute_overlap_densities(space; n_bands = nbands, callback = info -> push!(steps, info.step))
+    @test steps == 1:(nbands * (nbands + 1) ÷ 2)
+
     # Full grid without cutoff reduction
     ρ_full, G_full = compute_overlap_densities(space; n_bands = nbands, Ecut_ratio = nothing)
     @test length(G_full) == length(scfres.basis.kpoints[1].G_vectors)

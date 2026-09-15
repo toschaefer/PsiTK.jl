@@ -1,55 +1,29 @@
-
 """
-Default callback function to dump status of the DFTK.LOBPCG function
+    ShowProgress(; desc="Progress")
 
-# Arguments
-- `thresh`: the target threshold for the LOBPCG solver
-- `description`: a prefix string for the output
+Callback printing a progress bar for step-wise computations (e.g.
+[`compute_overlap_densities`](@ref)). The callback is called with a NamedTuple
+`info` providing at least `info.step` and `info.total_steps`; the bar is created lazily
+on the first call.
 """
-function make_lobpcg_callback(thresh; description = nothing)
-    start_time = time()
-
-    prefix = ""
-    if !isnothing(description)
-        prefix = "$description | "
-    end
-
-    return function (info)
-        niter = info.niter
-        nlocked = info.nlocked
-        n_conv_check = info.n_conv_check
-        resid_norm = norm(info.resid_history[1:n_conv_check, niter+1])
-        time_str = TimerOutputs.prettytime((time()-start_time)*1e9)
-        @printf("\r\e[2K") # Carriage return
-        @printf(
-            "%sIteration: %d | Converged = %d / %d | Residual = %.2e (target: %.1e) | Elapsed time = %s",
-            prefix,
-            niter,
-            nlocked,
-            n_conv_check,
-            resid_norm,
-            thresh,
-            time_str
-        )
-
-        # line break if LOBPCG finished
-        if nlocked >= n_conv_check
-            @printf("\n")
-        end
-    end
+struct ShowProgress
+    desc::String
+    progress::Ref{Union{Nothing, Progress}}
+end
+function ShowProgress(; desc = "Progress")
+    return ShowProgress(desc, Ref{Union{Nothing, Progress}}(nothing))
 end
 
-
-function make_coulomb_vertex_callback(total_steps)
-    p = Progress(
-        total_steps;
-        desc = "Computing Coulomb Vertex",
-        dt = 0.5,
-        barlen = 20,
-        barglyphs = BarGlyphs(' ', '━', '╸', '─', ' '),
-        color = :normal,
-    )
-    return function ()
-        next!(p)
+function (callback::ShowProgress)(info)
+    if isnothing(callback.progress[])
+        callback.progress[] = Progress(
+            info.total_steps;
+            desc = callback.desc,
+            dt = 0.5,
+            barlen = 20,
+            barglyphs = BarGlyphs(' ', '━', '╸', '─', ' '),
+            color = :normal,
+        )
     end
+    next!(callback.progress[])
 end

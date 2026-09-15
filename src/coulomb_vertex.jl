@@ -4,7 +4,8 @@
         ket_space::OrbitalSpace;
         n_bands_bra=size(bra_space.ψ[1], 2),
         n_bands_ket=size(ket_space.ψ[1], 2),
-        Ecut_ratio=1.0
+        Ecut_ratio=1.0,
+        callback=identity
     )
     compute_overlap_densities(space::OrbitalSpace; n_bands=size(space.ψ[1], 2), kwargs...)
 
@@ -20,6 +21,8 @@ Compute the overlap densities in reciprocal space
 - `n_bands_ket`: number of bands to be considered from ket_space
 - `Ecut_ratio`: ratio to reduce the plane-wave cutoff for the densities (default: 1.0),
   `nothing` keeps the full plane-wave grid
+- `callback`: called after each orbital pair with `(; step, total_steps)`,
+  e.g. `callback=ShowProgress()` for a progress bar (default: no output)
 
 # Returns
 A tuple `(ρmnG, G_vectors)`:
@@ -32,18 +35,9 @@ function compute_overlap_densities(
     n_bands_bra = size(bra_space.ψ[1], 2),
     n_bands_ket = size(ket_space.ψ[1], 2),
     Ecut_ratio = 1.0,
+    callback = identity,
 )
     basis = bra_space.basis
-    nk = length(basis.kpoints)
-
-    # === set up callback ===
-    if bra_space === ket_space
-        total_steps = (n_bands_bra*(n_bands_bra+1)÷2)*nk^2 # only upper triangle of ρmnG
-    else
-        total_steps = n_bands_bra * n_bands_ket * nk^2
-    end
-    callback = make_coulomb_vertex_callback(total_steps)
-
     G_indices = _G_indices_within_cutoff(basis, Ecut_ratio)
     ρmnG = _compute_overlap_densities(
         basis,
@@ -79,7 +73,8 @@ end
         interaction_kernel=DFTK.Coulomb(DFTK.ProbeCharge()),
         n_bands_bra=size(bra_space.ψ[1], 2),
         n_bands_ket=size(ket_space.ψ[1], 2),
-        Ecut_ratio=2/3
+        Ecut_ratio=2/3,
+        callback=identity
     )
     compute_coulomb_vertex(space::OrbitalSpace; n_bands=size(space.ψ[1], 2), kwargs...)
 
@@ -100,6 +95,8 @@ v(\bm G) = \frac{4π}{\bm G^2}
 - `n_bands_bra`: number of bands to be considered from bra_space
 - `n_bands_ket`: number of bands to be considered from ket_space
 - `Ecut_ratio`: ratio to reduce the plane-wave cutoff for the vertex (default: 2/3)
+- `callback`: called after each orbital pair with `(; step, total_steps)`,
+  e.g. `callback=ShowProgress()` for a progress bar (default: no output)
 
 # Returns
 A tuple `(ΓmnG, G_vectors, kernel_fourier)`:
@@ -114,6 +111,7 @@ function compute_coulomb_vertex(
     n_bands_bra = size(bra_space.ψ[1], 2),
     n_bands_ket = size(ket_space.ψ[1], 2),
     Ecut_ratio = 2/3,
+    callback = identity,
 )
     ρmnG, G_vectors = compute_overlap_densities(
         bra_space,
@@ -121,6 +119,7 @@ function compute_coulomb_vertex(
         n_bands_bra,
         n_bands_ket,
         Ecut_ratio,
+        callback,
     )
 
     basis = bra_space.basis
@@ -146,7 +145,7 @@ function _compute_overlap_densities(
     n_bands_bra = size(ψ_bra[1], 2),
     n_bands_ket = size(ψ_ket[1], 2),
     G_indices = eachindex(G_vectors(basis, basis.kpoints[1])),
-    callback = nothing,
+    callback = identity,
 ) where {T}
     kpt = basis.kpoints[1]
     n_kpt = length(basis.kpoints)
@@ -160,6 +159,12 @@ function _compute_overlap_densities(
     ρmnG = zeros(complex(T), n_kpt, n_bands_bra, n_kpt, n_bands_ket, length(G_indices))
 
     is_symmetric = (ψ_bra === ψ_ket)
+    if is_symmetric
+        total_steps = (n_bands_bra*(n_bands_bra+1)÷2)*n_kpt^2 # only upper triangle of ρmnG
+    else
+        total_steps = n_bands_bra * n_bands_ket * n_kpt^2
+    end
+    step = 0
 
     # TODO:
     # Idea is to make some outer loop over the m-slices
@@ -195,10 +200,8 @@ function _compute_overlap_densities(
                     ρmnG[ikn, n, ikm, m, :] .= conj.(overlap_density[idx_minus_G])
                 end
 
-                # Callback
-                if !isnothing(callback)
-                    callback()
-                end
+                step += 1
+                callback((; step, total_steps))
             end
         end
     end

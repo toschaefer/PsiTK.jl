@@ -60,7 +60,7 @@ function main()
 
     # Compute the Coulomb Vertex for the Active Space
     println("Compute Coulomb Vertex")
-    ΓmnG, G_vectors, kernel_fourier = compute_coulomb_vertex(active_space)
+    ΓmnG, G_vectors, kernel_fourier = compute_coulomb_vertex(active_space; callback = ShowProgress())
     vertex_alg = CoulombGramian()
     ΓmnF, coulomb_vertex_singular_vectors = compress_coulomb_vertex(ΓmnG, vertex_alg)
 

@@ -55,7 +55,7 @@ dsv_space = generate_orbitals(target, occ_space)
 
 # Dump correlation tensors for Cc4s
 active_space = merge_spaces(occ_space, dsv_space)
-ΓmnG, G_vectors, kernel_fourier = compute_coulomb_vertex(active_space)
+ΓmnG, G_vectors, kernel_fourier = compute_coulomb_vertex(active_space; callback = ShowProgress())
 
 dump_cc4s_files(active_space, ΓmnG, G_vectors, kernel_fourier; folder="cc4s_data")
 ```
