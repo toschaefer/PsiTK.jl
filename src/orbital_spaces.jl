@@ -50,10 +50,12 @@ end
 
 Merges multiple `OrbitalSpace`s into a single `OrbitalSpace`.
 """
-function merge_spaces(spaces::OrbitalSpace{B,T,R}...) where {B,T,R}
-    @assert length(spaces) > 0 "Must provide at least one OrbitalSpace to merge."
-
-    basis = spaces[1].basis
+function merge_spaces(
+    space::OrbitalSpace{B,T,R},
+    more_spaces::OrbitalSpace{B,T,R}...,
+) where {B,T,R}
+    spaces = (space, more_spaces...)
+    basis = space.basis
     nkpt = length(basis.kpoints)
     is_orthonormal_merged = all(s.is_orthonormal for s in spaces)
 

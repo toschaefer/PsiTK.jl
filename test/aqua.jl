@@ -1,4 +1,4 @@
-@testitem "Aqua.jl Quality Assurance" begin
+@testitem "Aqua.jl Quality Assurance" tags=[:aqua] begin
     using Aqua
     using PsiTK
 

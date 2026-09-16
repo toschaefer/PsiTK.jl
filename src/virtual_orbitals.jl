@@ -76,7 +76,7 @@ struct MaximalExchangeVirtuals{TK}
     K::TK    # The Fock exchange operator
 end
 
-function MaximalExchangeVirtuals(scfres, occ_space::OrbitalSpace; n_orbitals::Int)
+function MaximalExchangeVirtuals(scfres::NamedTuple, occ_space::OrbitalSpace; n_orbitals::Int)
     basis = scfres.basis
     ExactExchangeTerm = only([term for term in basis.terms if term isa DFTK.TermExactExchange])
     _, K = DFTK.ene_ops(ExactExchangeTerm, basis, occ_space.ψ, occ_space.occupations)
