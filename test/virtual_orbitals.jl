@@ -1,4 +1,4 @@
-@testitem "Generate Orbitals" setup=[TestSystems] begin
+@testitem "Generate Orbitals" setup=[TestSystems] tags=[:virtual_orbitals] begin
     using PsiTK
     using DFTK
     using LinearAlgebra
@@ -13,7 +13,7 @@
     # ---------------------------------------------------------
     # 1. Test CanonicalVirtuals (FullDiag)
     # ---------------------------------------------------------
-    solver_fd = FullDiagonalizationEigensolver()
+    solver_fd = FullDiagonalization()
     
     # Test N_virt = :all
     target_canon_all = CanonicalVirtuals(scfres; n_orbitals = :all)
@@ -42,7 +42,7 @@
     # ---------------------------------------------------------
     # 2. Test CanonicalVirtuals (LOBPCG)
     # ---------------------------------------------------------
-    solver_lobpcg = LOBPCGEigensolver(tol=1e-7, maxiter=500)
+    solver_lobpcg = LOBPCG(tol=1e-7, maxiter=500)
     virt_canon_lobpcg = generate_orbitals(target, occ_space, solver_lobpcg)
     
     @test size(virt_canon_lobpcg.ψ[1]) == (Nfull, N_virt_target)

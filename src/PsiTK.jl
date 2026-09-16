@@ -5,6 +5,7 @@ using Printf
 using ProgressMeter
 using TimerOutputs
 using DFTK
+import LOBPCGEigensolver: lobpcg, DefaultLobpcgCallback
 
 export ShowProgress
 include("callbacks.jl")

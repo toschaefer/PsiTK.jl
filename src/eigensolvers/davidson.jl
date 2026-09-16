@@ -1,5 +1,5 @@
 """
-    BlockDavidsonEigensolver(; tol=1e-6, use_jabobi_davidson=false, maxiter=200)
+    BlockDavidson(; tol=1e-6, use_jabobi_davidson=false, maxiter=200)
 
 Configuration struct for the Block Davidson iterative eigensolver.
 
@@ -8,14 +8,14 @@ Configuration struct for the Block Davidson iterative eigensolver.
 - `use_jabobi_davidson::Bool`: If true, applies a Jacobi-Davidson style correction equation... 
 - `maxiter::Int`: Maximum number of iterations before the solver aborts.
 """
-Base.@kwdef struct BlockDavidsonEigensolver
+Base.@kwdef struct BlockDavidson
     tol::Float64 = 1e-6
     use_jabobi_davidson::Bool = false
     maxiter::Int = 200
 end
 
 """
-    davidson(A, X0, solver::BlockDavidsonEigensolver; kwargs...)
+    davidson(A, X0, solver::BlockDavidson; kwargs...)
 
 Iteratively computes the lowest eigenvalues and eigenvectors of the linear operator `A` 
 using a Block Davidson method.
@@ -28,9 +28,9 @@ Francesco Mereto, Master's Thesis, 2026 (link?)
 # Arguments
 - `A`: The linear operator or matrix to diagonalize.
 - `X0`: The initial guess for the eigenvectors.
-- `solver`: The `BlockDavidsonEigensolver` configuration (tolerance, max iterations, etc.).
+- `solver`: The `BlockDavidson` configuration (tolerance, max iterations, etc.).
 """
-function davidson(A, X0, solver::BlockDavidsonEigensolver; kwargs...)
+function davidson(A, X0, solver::BlockDavidson; kwargs...)
     # TODO: Mereto
     error("Block Davidson solver not implemented yet.")
     
