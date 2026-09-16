@@ -8,10 +8,12 @@ Read the `README.md` and linked documentation before contributing.
 * **Readable & Simple:** Simplicity over feature count. While performance is the ultimate priority, prioritize transparent and hackable implementations over clever brevity.
 * **Code as Documentation:** The code itself is the primary documentation. 
   * Keep functions short and trackable.
-  * Write docstrings ONLY for the public API or highly non-obvious user-facing functions. **When adding a new public function, you must also append it to `docs/src/code_reference.md`.**
+  * Write docstrings ONLY for the public API or highly non-obvious user-facing functions. Every exported name needs a docstring (`docs/make.jl` builds with `checkdocs = :exports` and fails otherwise); `docs/src/code_reference.md` picks them up automatically via `@autodocs`, so never list functions there by hand. When one docstring covers several methods (e.g. a convenience form), its argument list must explain every signature.
   * Use inline comments ONLY to explain physics/math reasoning, subtle normalizations, or workarounds. Never restate what the code mechanically does.
 
 ## Device-Agnostic Code (GPU/CPU)
+**Planned, not yet enforced.** The code is CPU-only; the rules below apply to new kernels and
+to explicit GPU-porting tasks. Never convert existing code or add GPU dependencies unasked.
 The exact same code path must run on both CPU and GPU.
 * **Allocation:** Never hardcode `zeros(...)` or `CuArray(...)`. Allocate using `similar(X)` or `fill!(similar(X), 0)` so the result inherits the device of `X`.
 * **Data Transfer:** Never use vendor-specific constructors like `CuArray(A)`. For instance (since we depend on `DFTK.jl`), leverage its existing infrastructure to move data (e.g., `DFTK.to_device(arch, A)` and `DFTK.to_cpu(A)`)
@@ -21,26 +23,11 @@ The exact same code path must run on both CPU and GPU.
 ## Style & Conventions
 Follow [Julia Blue Style](https://github.com/invenia/BlueStyle). Line length: ~92 characters.
 
-* **Signatures:** Break long function signatures vertically (one argument per line) with a trailing comma.
-* **Variables:** Use explicit NamedTuples `(; var=val)`, not `(var=val)`. Prefer readable, descriptive names over abbreviated ones.
-* **Loops:** Use `=` for ranges (`for i = 1:10`) and `in` for collections (`for item in array`).
-* **Types:** Always use explicit braces for where clauses: `where {T <: AbstractFloat}`.
-* **Arguments:** Keyword arguments must be explicit. No implicit positional-to-keyword promotion.
-* **Internals & Placeholders:** Prefix internal helpers with `_` (e.g., `_compute_density`). Use `identity` as a placeholder for empty callbacks.
-
-## Units
-Use atomic units throughout. Lengths are in Bohr, energies in Hartree.
-```julia
-using Unitful, UnitfulAtomic
-austrip(10u"eV")    # Convert 10 eV → Hartree
-auconvert(u"Å", 1.2) # Convert 1.2 Bohr → Ångström
-
-```
 
 ## Testing & Quality Assurance
 
 * **Strict Quality Checks:** We use `Aqua.jl` to enforce strict code quality. All new code must be free of type ambiguities, unbound arguments, and pirated methods. Verify against `test/aqua.jl`.
-* **Test Structure:** Place tests in the appropriate files within the `test/` directory. If using `@testitem`, ensure the test block is fully self-contained.
+* **Test Structure:** Place tests in the appropriate files within the `test/` directory. A `@testitem` must not rely on state from other items; shared fixtures go into `@testmodule`s (e.g. `TestSystems` in `test/systems.jl`, via `setup=[TestSystems]`). Tag items (`tags=[:name]`) so they can be selected with `Pkg.test(test_args=["name"])`.
 
 ## Git & CI Workflow
 
