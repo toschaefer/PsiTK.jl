@@ -17,8 +17,12 @@ Compute the overlap densities in reciprocal space
 # Arguments
 - `bra_space`: the bra orbital space (e.g. occupied space)
 - `ket_space`: the ket orbital space (e.g. virtual space)
+- `space`: a single orbital space used as both bra and ket. Only the upper triangle
+  ``m ≤ n`` is computed, the rest follows from ``ρ_{nm,-\bm G} = ρ_{mn \bm G}^∗``.
+  This shortcut is taken whenever `bra_space === ket_space`.
 - `n_bands_bra`: number of bands to be considered from bra_space
 - `n_bands_ket`: number of bands to be considered from ket_space
+- `n_bands`: number of bands to be considered from `space` (bra and ket alike)
 - `Ecut_ratio`: ratio to reduce the plane-wave cutoff for the densities
   (default: 1.0, i.e. the full plane-wave grid of the basis)
 - `callback`: called after each orbital pair with `(; step, total_steps)`,
@@ -90,9 +94,12 @@ v(\bm G) = \frac{4π}{\bm G^2}
 # Arguments
 - `bra_space`: the bra orbital space (e.g. occupied space)
 - `ket_space`: the ket orbital space (e.g. virtual space)
+- `space`: a single orbital space used as both bra and ket, exploiting the symmetry
+  ``Γ_{nm,-\bm G} = Γ_{mn \bm G}^∗`` (see [`compute_overlap_densities`](@ref))
 - `interaction_kernel`: the DFTK interaction kernel to use (default: Coulomb)
 - `n_bands_bra`: number of bands to be considered from bra_space
 - `n_bands_ket`: number of bands to be considered from ket_space
+- `n_bands`: number of bands to be considered from `space` (bra and ket alike)
 - `Ecut_ratio`: ratio to reduce the plane-wave cutoff for the vertex (default: 2/3)
 - `callback`: called after each orbital pair with `(; step, total_steps)`,
   e.g. `callback=ShowProgress()` for a progress bar (default: no output)
