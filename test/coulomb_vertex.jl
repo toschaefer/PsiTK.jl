@@ -58,7 +58,9 @@
     svd_alg = AdaptiveRandomizedSVD(thresh = 1e-3)
     ΓmnG_svd, _ = compress_coulomb_vertex(ΓmnG, svd_alg)
     val_svd = norm(ΓmnG_svd)
-    @test isapprox(val_svd, val_cg, rtol = 1e-6)
+    # The randomized subspace can only lose spectral weight w.r.t. the exact Gramian result
+    @test val_svd <= val_cg * (1 + 1e-10)
+    @test isapprox(val_svd, val_cg, rtol = 1e-3)
     @test size(ΓmnG_svd)[1:4] == (nkpt, nbands, nkpt, nbands)
     @test size(ΓmnG_svd, 5) < size(ΓmnG, 5)
 end

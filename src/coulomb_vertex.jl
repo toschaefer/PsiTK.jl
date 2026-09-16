@@ -277,7 +277,7 @@ end
 
 
 @doc raw"""
-    AdaptiveRandomizedSVD(; thresh=1e-6)
+    AdaptiveRandomizedSVD(; thresh=1e-6, n_test_vectors=10)
 
 Strategy for [`compress_coulomb_vertex`](@ref) via an adaptive randomized SVD.
 
@@ -296,15 +296,19 @@ The compressed $\Gamma$ is then obtained via $\Gamma_\text{compressed} = \tilde 
 the effective transformation matrix being $Q U$.
 
 The dimension $N_F$ is found by a preceding adaptive range finder.
-This finder iteratively increases the columns of Q (i.e. $N_F$) in steps of $2\sqrt{N_{pp}}$ 
-and stops when the error for a stochastic test vector $\omega$
+This finder iteratively increases the columns of Q (i.e. $N_F$) in steps of $2\sqrt{N_{pp}}$
+and stops when the error for each of `n_test_vectors` stochastic test vectors $\omega_i$
 ```math
-\varepsilon =  \Vert (1 - QQ^\dagger)\Gamma^\dagger \omega \Vert
+\varepsilon_i =  \Vert (1 - QQ^\dagger)\Gamma^\dagger \omega_i \Vert
 ```
-is smaller than thresh/2.
+is smaller than $\sqrt{\text{thresh}}/2$. With $r$ test vectors this estimator bounds the
+true projection error with probability $1 - 10^{-r}$
+[Halko, Martinsson, Tropp, SIAM Rev. **53**, 217 (2011), Lemma 4.1]; a single test vector
+would stop the finder too early in a small fraction of runs.
 """
 Base.@kwdef struct AdaptiveRandomizedSVD
     thresh::Float64 = 1e-6
+    n_test_vectors::Int = 10
 end
 function compress_coulomb_vertex(
     ΓmnG::AbstractArray{T,5},
@@ -322,8 +326,8 @@ function compress_coulomb_vertex(
     # Step size for increasing the basis = 2*(√Npp)
     column_block_size = round(Int, 2*Npp^0.5)
 
-    # Stochastic test vector for error estimation
-    ω = randn(T, Npp)
+    # Stochastic test vectors for error estimation
+    Ω_test = randn(T, Npp, strategy.n_test_vectors)
 
     # target error a little smaller than √thresh
     target_error = sqrt(thresh)/2
@@ -331,9 +335,8 @@ function compress_coulomb_vertex(
     # set current error initially larger than stop criterion 
     current_error = 2 * target_error
 
-    # Precompute projection of the test vector onto Γ
-    proj_ω = Γmat' * ω
-    rem_ω = copy(proj_ω)
+    # Residuals of the projected test vectors, deflated block by block below
+    rem_test = Γmat' * Ω_test
 
     current_cols = 0
 
@@ -362,10 +365,9 @@ function compress_coulomb_vertex(
         push!(Q_blocks, Q_block)        # Update stochastic basis blocks
         current_cols += current_block_size
 
-        # Update current_error incrementally
-        coeffs_ω = Q_block' * rem_ω
-        rem_ω .-= Q_block * coeffs_ω
-        current_error = norm(rem_ω)
+        # Update current_error incrementally: worst residual over the test vectors
+        rem_test .-= Q_block * (Q_block' * rem_test)
+        current_error = maximum(norm, eachcol(rem_test))
     end
 
     # Combine blocks to form the full basis
