@@ -84,8 +84,8 @@ end
     dump_cc4s_files(
         active_space::OrbitalSpace,
         ΓmnG::AbstractArray,
-        G_vectors::AbstractVector = SVector{3, Int}[],
-        kernel_fourier::AbstractVector = Float64[];
+        G_vectors::AbstractVector,
+        kernel_fourier::AbstractVector;
         coulomb_vertex_singular_vectors::Union{AbstractMatrix, Nothing} = nothing,
         folder::AbstractString=joinpath(pwd(), "cc4s"),
         force=false
@@ -96,18 +96,26 @@ Write Cc4s input files (*.yaml and *.elements):
 - CoulombVertex
 - DeltaIntegralsHH
 - DeltaIntegralsPPHH
-- GridVectors (if G_vectors is provided)
-- CoulombPotential (if kernel_fourier is provided)
-- CoulombVertexSingularVectors (if coulomb_vertex_singular_vectors is provided)
+- GridVectors
+- CoulombPotential
+- CoulombVertexSingularVectors (only if `coulomb_vertex_singular_vectors` is provided)
+
+Requires a Gamma-only calculation with integer occupations.
 
 # Arguments
 - `active_space`: the `OrbitalSpace` containing the bands (occupations and eigenvalues)
-- `ΓmnG`: the (compressed) Coulomb vertex
-- `G_vectors`: corresponding plane-wave vectors
-- `kernel_fourier`: the evaluated Coulomb potential at the given G_vectors
-- `coulomb_vertex_singular_vectors`: transformation matrix from Coulomb vertex compression
-- `folder`: the target folder
+- `ΓmnG`: the Coulomb vertex, either uncompressed from [`compute_coulomb_vertex`](@ref)
+  or compressed by [`compress_coulomb_vertex`](@ref)
+- `G_vectors`: the plane-wave vectors of the uncompressed vertex
+- `kernel_fourier`: the interaction kernel evaluated at `G_vectors`
+  (both as returned by [`compute_coulomb_vertex`](@ref))
+- `coulomb_vertex_singular_vectors`: transformation matrix from
+  [`compress_coulomb_vertex`](@ref)
+- `folder`: the target folder (created if missing)
 - `force`: if true existing files will be overwritten
+
+# Returns
+The list of written file paths.
 """
 function dump_cc4s_files(
     active_space::OrbitalSpace,

@@ -219,17 +219,39 @@ end
 
 
 @doc raw"""
-    CoulombGramian
+    compress_coulomb_vertex(ΓmnG::AbstractArray{T,5}, strategy)
 
-This strategy compresses the Coulomb vertex $\Gamma_{mn}^{G}$ through the largest
-eigenvalues of the Coulomb Gramian
+Compress the Coulomb vertex along its plane-wave axis $\bm G$ into a smaller auxiliary
+field index $F$,
+```math
+Γ_{mn F} = \sum_{\bm G} Γ_{mn \bm G} \, U_{\bm G F}
+```
+where the columns of the transformation $U$ span the dominant subspace of the Coulomb
+Gramian $\Gamma^\dagger \Gamma$. How $U$ is determined depends on `strategy`:
+- [`CoulombGramian`](@ref): exact diagonalization of the Gramian
+- [`AdaptiveRandomizedSVD`](@ref): randomized range finder followed by diagonalization
+
+# Arguments
+- `ΓmnG`: the uncompressed Coulomb vertex as returned by [`compute_coulomb_vertex`](@ref)
+- `strategy`: the compression strategy, carrying its own threshold
+
+# Returns
+A tuple `(ΓmnF, coulomb_vertex_singular_vectors)`:
+- `ΓmnF`: the compressed vertex of shape `(nk, n_bands, nk, n_bands, NF)`
+- `coulomb_vertex_singular_vectors`: the transformation matrix $U$ of shape `(NG, NF)`
+"""
+function compress_coulomb_vertex end
+
+@doc raw"""
+    CoulombGramian(; thresh=1e-6)
+
+Strategy for [`compress_coulomb_vertex`](@ref) through the largest eigenvalues of the
+Coulomb Gramian
 ```math
 H = - \Gamma^\dagger \Gamma = U \Lambda U^\dagger
-```    
+```
 The compressed $\Gamma$ is then obtained via $\Gamma_\text{compressed} = \Gamma U$,
-where the columns of $U$ are restricted such that $\lambda >$ `thresh`.
-
-Returns a tuple `(ΓmnF, coulomb_vertex_singular_vectors)`, where `coulomb_vertex_singular_vectors` is the applied transformation matrix.
+where the columns of $U$ are restricted such that $|\lambda| >$ `thresh`.
 """
 Base.@kwdef struct CoulombGramian
     thresh::Float64 = 1e-6
@@ -255,9 +277,9 @@ end
 
 
 @doc raw"""
-    AdaptiveRandomizedSVD
+    AdaptiveRandomizedSVD(; thresh=1e-6)
 
-This strategy compresses the Coulomb vertex $\Gamma_{mn}^{G}$ via an adaptive randomized SVD.
+Strategy for [`compress_coulomb_vertex`](@ref) via an adaptive randomized SVD.
 
 The algorithm approximates the range of the row space of $\Gamma$ (the orbital indices
 are considered as superindex) through a thin basis Q, such that
@@ -270,11 +292,10 @@ This is done through a stochastic Q and a diagonalization of
 H = -\tilde \Gamma^\dagger \tilde \Gamma = U \Lambda U^\dagger
 ```    
 where $\tilde \Gamma = \Gamma Q$. 
-The compressed $\Gamma$ is then obtained via $\Gamma_\text{compressed} = \tilde \Gamma U$.
+The compressed $\Gamma$ is then obtained via $\Gamma_\text{compressed} = \tilde \Gamma U$,
+the effective transformation matrix being $Q U$.
 
-Returns a tuple `(ΓmnF, coulomb_vertex_singular_vectors)`, where `coulomb_vertex_singular_vectors` is the effective transformation matrix.
-
-The dimension $N_F$ is found by a preceding adaptive range finder. 
+The dimension $N_F$ is found by a preceding adaptive range finder.
 This finder iteratively increases the columns of Q (i.e. $N_F$) in steps of $2\sqrt{N_{pp}}$ 
 and stops when the error for a stochastic test vector $\omega$
 ```math
