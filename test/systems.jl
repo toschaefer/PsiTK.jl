@@ -29,7 +29,9 @@
         ]
 
         # --- Run PBE to get a good initial guess
-        model_pbe = model_DFT(lattice, atoms, positions; functionals = PBE())
+        # No symmetries, like the HF model, so that both bases share the FFT grid (cf. DFTK's
+        # examples/exact_exchange.jl) and ρ, ψ can seed the HF SCF
+        model_pbe = model_DFT(lattice, atoms, positions; functionals = PBE(), symmetries = false)
         basis = PlaneWaveBasis(model_pbe; Ecut = Ecut, kgrid = [1, 1, 1])
         scfres_pbe = self_consistent_field(
             basis;
@@ -86,7 +88,9 @@
         
         kwargs_nbands = isnothing(n_bands_converge) ? (;) : (; nbandsalg=FixedBands(; n_bands_converge))
 
-        model_pbe = model_DFT(lattice, atoms, positions; functionals = PBE())
+        # No symmetries, like the HF model, so that both bases share the FFT grid (cf. DFTK's
+        # examples/exact_exchange.jl) and ρ, ψ can seed the HF SCF
+        model_pbe = model_DFT(lattice, atoms, positions; functionals = PBE(), symmetries = false)
         basis = PlaneWaveBasis(model_pbe; Ecut = Ecut, kgrid = [1, 1, 1])
         scfres_pbe = self_consistent_field(
             basis;
@@ -144,7 +148,9 @@
 
         kwargs_nbands = isnothing(n_bands_converge) ? (;) : (; nbandsalg=FixedBands(; n_bands_converge))
 
-        model_pbe = model_DFT(lattice, atoms, positions; functionals = PBE())
+        # No symmetries, like the HF model, so that both bases share the FFT grid (cf. DFTK's
+        # examples/exact_exchange.jl) and ρ, ψ can seed the HF SCF
+        model_pbe = model_DFT(lattice, atoms, positions; functionals = PBE(), symmetries = false)
         basis = PlaneWaveBasis(model_pbe; Ecut = Ecut, kgrid = [1, 1, 1])
         scfres_pbe = self_consistent_field(
             basis;
@@ -201,7 +207,9 @@
 
         kwargs_nbands = isnothing(n_bands_converge) ? (;) : (; nbandsalg=FixedBands(; n_bands_converge))
 
-        model_pbe = model_DFT(lattice, atoms, positions; functionals = PBE())
+        # No symmetries, like the HF model, so that both bases share the FFT grid (cf. DFTK's
+        # examples/exact_exchange.jl) and ρ, ψ can seed the HF SCF
+        model_pbe = model_DFT(lattice, atoms, positions; functionals = PBE(), symmetries = false)
         basis = PlaneWaveBasis(model_pbe; Ecut = Ecut, kgrid = [1, 1, 1])
         scfres_pbe = self_consistent_field(
             basis;
