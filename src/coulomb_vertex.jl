@@ -23,8 +23,10 @@ Compute the overlap densities in reciprocal space
 - `n_bands_bra`: number of bands to be considered from bra_space
 - `n_bands_ket`: number of bands to be considered from ket_space
 - `n_bands`: number of bands to be considered from `space` (bra and ket alike)
-- `Ecut_ratio`: ratio to reduce the plane-wave cutoff for the densities
-  (default: 1.0, i.e. the full plane-wave grid of the basis)
+- `Ecut_ratio`: ratio of the plane-wave cutoff (in energy) for the densities relative to
+  the orbital cutoff `basis.Ecut` (default: 1.0). Values up to `supersampling^2` of the
+  basis (4 for DFTK's default) are allowed since the FFT grid holds products of orbitals
+  exactly up to there; `Ecut_ratio=4` therefore yields the exact overlap densities.
 - `callback`: called after each orbital pair with `(; step, total_steps)`,
   e.g. `callback=ShowProgress()` for a progress bar (default: no output)
 
@@ -42,6 +44,8 @@ function compute_overlap_densities(
     callback = identity,
 )
     basis = bra_space.basis
+    all(kpt -> iszero(kpt.coordinate), basis.kpoints) ||
+        error("Overlap densities are only implemented for Gamma-point calculations.")
     G_indices = _G_indices_within_cutoff(basis, Ecut_ratio)
     ρmnG = _compute_overlap_densities(
         basis,
@@ -53,20 +57,28 @@ function compute_overlap_densities(
         callback,
     )
 
-    return ρmnG, G_vectors(basis, basis.kpoints[1])[G_indices]
+    return ρmnG, G_vectors(basis)[G_indices]
 end
 
 function compute_overlap_densities(space::OrbitalSpace; n_bands = size(space.ψ[1], 2), kwargs...)
     return compute_overlap_densities(space, space; n_bands_bra=n_bands, n_bands_ket=n_bands, kwargs...)
 end
 
-# Indices of the G vectors of the first k-point within the reduced cutoff Ecut * Ecut_ratio
-# (Gamma-only for now)
+# Linear indices into the full FFT cube G_vectors(basis) of the G vectors with
+# |G|^2/2 <= Ecut * Ecut_ratio. The cube covers -cld(N-1,2):fld(N-1,2) per axis; requiring
+# the sphere to fit into the smaller side (N-1)÷2 keeps the selection closed under G -> -G.
 function _G_indices_within_cutoff(basis, Ecut_ratio)
-    Gs = G_vectors(basis, basis.kpoints[1])
-    recip_lattice = basis.model.recip_lattice
     Ecut_reduced = basis.Ecut * Ecut_ratio
-    return findall(G -> sum(abs2, recip_lattice * G) / 2 <= Ecut_reduced, Gs)
+    # The sphere of radius Gmax extends to |n_i| <= Gmax |a_i| / 2π in integer coordinates
+    Gmax = sqrt(2 * Ecut_reduced)
+    for (i, a_i) in enumerate(eachcol(basis.model.lattice))
+        Gmax * norm(a_i) / 2π <= (basis.fft_size[i] - 1) ÷ 2 ||
+            error("Ecut_ratio=$Ecut_ratio exceeds the FFT grid of the basis " *
+                  "(at most supersampling^2, i.e. 4 for DFTK's default).")
+    end
+    recip_lattice = basis.model.recip_lattice
+    # vec: linear indices into the cube (findall on the 3D array would give CartesianIndex)
+    return findall(G -> sum(abs2, recip_lattice * G) / 2 <= Ecut_reduced, vec(G_vectors(basis)))
 end
 
 @doc raw"""
@@ -100,7 +112,7 @@ v(\bm G) = \frac{4π}{\bm G^2}
 - `n_bands_bra`: number of bands to be considered from bra_space
 - `n_bands_ket`: number of bands to be considered from ket_space
 - `n_bands`: number of bands to be considered from `space` (bra and ket alike)
-- `Ecut_ratio`: ratio to reduce the plane-wave cutoff for the vertex (default: 2/3)
+- `Ecut_ratio`: cutoff ratio for the vertex (default: 2/3), see [`compute_overlap_densities`](@ref)
 - `callback`: called after each orbital pair with `(; step, total_steps)`,
   e.g. `callback=ShowProgress()` for a progress bar (default: no output)
 
@@ -128,9 +140,11 @@ function compute_coulomb_vertex(
         callback,
     )
 
+    # Kernel on the full FFT cube for momentum transfer q = 0 (Gamma-only)
     basis = bra_space.basis
     G_indices = _G_indices_within_cutoff(basis, Ecut_ratio)
-    kernel_fourier = DFTK.compute_kernel_fourier(interaction_kernel, basis)[G_indices]
+    kernel_cube = DFTK.compute_kernel_fourier(interaction_kernel, basis, basis.kpoints[1])
+    kernel_fourier = kernel_cube[G_indices]
 
     # Γ = √v ⊙ ρ along the G axis; ρmnG is not needed anymore, so scale in place
     ΓmnG = ρmnG
@@ -150,14 +164,13 @@ function _compute_overlap_densities(
     ψ_ket::AbstractVector{<:AbstractArray{T}};
     n_bands_bra = size(ψ_bra[1], 2),
     n_bands_ket = size(ψ_ket[1], 2),
-    G_indices = eachindex(G_vectors(basis, basis.kpoints[1])),
+    G_indices = eachindex(G_vectors(basis)),
     callback = identity,
 ) where {T}
-    kpt = basis.kpoints[1]
     n_kpt = length(basis.kpoints)
 
-    # === Create index to map each stored G to -G on the full grid ===
-    Gs = G_vectors(basis, kpt)
+    # === Create index to map each stored G to -G on the full FFT cube ===
+    Gs = G_vectors(basis)
     G_to_idx = Dict(Gs[i] => i for i in eachindex(Gs))
     idx_minus_G = [G_to_idx[-Gs[i]] for i in G_indices]
 
@@ -195,8 +208,8 @@ function _compute_overlap_densities(
                 # TODO: pre-calculate some of them (not all because virtual space can be large)
                 ψmk_real = ifft(basis, kptm, ψ_bra[ikm][:, m])
 
-                # Calcualte overlap density ρ_nm(r) = ψm*(r)ψn(r) and FFT to reciprocal space
-                overlap_density = fft(basis, kptn, conj.(ψmk_real) .* ψnk_real)
+                # Calculate overlap density ρ_mn(r) = ψm*(r)ψn(r) and FFT it on the full cube
+                overlap_density = fft(basis, conj.(ψmk_real) .* ψnk_real)
 
                 # store entry of the overlap densities
                 ρmnG[ikm, m, ikn, n, :] .= overlap_density[G_indices]

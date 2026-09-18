@@ -19,7 +19,7 @@
     val = norm(ΓmnG)
 
     # Check against reference value
-    @test isapprox(val, 2.318769223791925, rtol = 1e-6)
+    @test isapprox(val, 2.319359783263448, rtol = 1e-6)
 
     # Bare overlap densities: Γ = √v ⊙ ρ on the same G vectors
     ρmnG, G_vectors_ρ = compute_overlap_densities(space; n_bands = nbands, Ecut_ratio = 2/3)
@@ -46,11 +46,18 @@
     @test length(G_full) == length(scfres.basis.kpoints[1].G_vectors)
     @test size(ρ_full, 5) > size(ρmnG, 5)
 
+    # Ecut_ratio = 4 (DFTK's default supersampling of 2) holds the exact overlap densities;
+    # beyond the FFT grid an error is raised instead of silently truncating
+    ρ_exact, G_exact = compute_overlap_densities(space; n_bands = nbands, Ecut_ratio = 4)
+    @test size(ρ_exact, 5) == length(G_exact) > size(ρ_full, 5)
+    @test all(G -> -G in G_exact, G_exact)
+    @test_throws ErrorException compute_overlap_densities(space; n_bands = nbands, Ecut_ratio = 8)
+
     # Test CoulombGramian compression
     cg_alg = CoulombGramian(thresh = 1e-3)
     ΓmnG_cg, _ = compress_coulomb_vertex(ΓmnG, cg_alg)
     val_cg = norm(ΓmnG_cg)
-    @test isapprox(val_cg, 2.3182425676526193, rtol = 1e-6)
+    @test isapprox(val_cg, 2.318834927236268, rtol = 1e-6)
     @test size(ΓmnG_cg)[1:4] == (nkpt, nbands, nkpt, nbands)
     @test size(ΓmnG_cg, 5) < size(ΓmnG, 5)
 
