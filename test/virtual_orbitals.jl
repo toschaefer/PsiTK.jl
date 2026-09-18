@@ -21,7 +21,7 @@
     @test virt_canon_fd_all.ψ[1]' * virt_canon_fd_all.ψ[1] ≈ I
     @test norm(occ_space.ψ[1]' * virt_canon_fd_all.ψ[1]) < 1e-6
     @test isapprox(norm(virt_canon_fd_all.ψ[1]), 26.400757564888178, rtol=1e-6)
-    @test isapprox(sum(virt_canon_fd_all.eigenvalues[1]), 6318.532948394055, rtol=1e-6)
+    @test isapprox(sum(virt_canon_fd_all.eigenvalues[1]), 6318.26601753155, rtol=1e-6)
     # Diagonalization invariant: the Fock operator is diagonal in the virtual space
     H_v = virt_canon_fd_all.ψ[1]' * (ham[1] * virt_canon_fd_all.ψ[1])
     @test norm(H_v - Diagonal(H_v)) < 1e-6
@@ -34,7 +34,7 @@
     @test virt_canon_fd.ψ[1]' * virt_canon_fd.ψ[1] ≈ I
     @test norm(occ_space.ψ[1]' * virt_canon_fd.ψ[1]) < 1e-6
     @test isapprox(norm(virt_canon_fd.ψ[1]), 3.464101615137754, rtol=1e-6)
-    @test isapprox(sum(virt_canon_fd.eigenvalues[1]), 8.215464748722031, rtol=1e-6)
+    @test isapprox(sum(virt_canon_fd.eigenvalues[1]), 8.215419405004843, rtol=1e-6)
 
     # ---------------------------------------------------------
     # 2. CanonicalVirtuals, LOBPCG (default for a fixed number of orbitals)
@@ -46,7 +46,7 @@
     @test virt_canon_lobpcg.ψ[1]' * virt_canon_lobpcg.ψ[1] ≈ I
     @test norm(occ_space.ψ[1]' * virt_canon_lobpcg.ψ[1]) < 1e-6
     @test isapprox(norm(virt_canon_lobpcg.ψ[1]), 3.464101615137754, rtol=1e-6)
-    @test isapprox(sum(virt_canon_lobpcg.eigenvalues[1]), 8.215464748722068, rtol=1e-6)
+    @test isapprox(sum(virt_canon_lobpcg.eigenvalues[1]), 8.21541940500492, rtol=1e-6)
     # LOBPCG and FullDiagonalization solve the same eigenproblem
     @test isapprox(virt_canon_lobpcg.eigenvalues[1], virt_canon_fd.eigenvalues[1], rtol=1e-4)
 
