@@ -305,6 +305,9 @@ is smaller than $\sqrt{\text{thresh}}/2$. With $r$ test vectors this estimator b
 true projection error with probability $1 - 10^{-r}$
 [Halko, Martinsson, Tropp, SIAM Rev. **53**, 217 (2011), Lemma 4.1]; a single test vector
 would stop the finder too early in a small fraction of runs.
+
+TODO: The entire algorithm could be improved by techniques proposed in the following paper:
+Fast and accurate randomized algorithms for low-rank tensor decompositions, L. Ma, E. Solomonik (https://proceedings.neurips.cc/paper_files/paper/2021/hash/cbef46321026d8404bc3216d4774c8a9-Abstract.html)
 """
 Base.@kwdef struct AdaptiveRandomizedSVD
     thresh::Float64 = 1e-6
