@@ -46,6 +46,10 @@
     @test length(G_full) == length(scfres.basis.kpoints[1].G_vectors)
     @test size(ρ_full, 5) > size(ρmnG, 5)
 
+    # The Cc4s dump refuses non-orthonormal (non-canonical) spaces
+    space_nonortho = OrbitalSpace(space.basis, space.ψ, space.eigenvalues, space.occupations, space.εF, false)
+    @test_throws ErrorException dump_cc4s_files(space_nonortho, ΓmnG, G_vectors, kernel_fourier; folder = mktempdir())
+
     # Test CoulombGramian compression
     cg_alg = CoulombGramian(thresh = 1e-3)
     ΓmnG_cg, _ = compress_coulomb_vertex(ΓmnG, cg_alg)

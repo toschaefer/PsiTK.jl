@@ -26,7 +26,7 @@ PsiTK is currently under active development. Here's our planned trajectory:
 - [x] [Cc4s](https://gitlab.cc4s.org/cc4s/cc4s) interface for coupled cluster calculations
 - [x] Test suite
 - [x] Documentation with examples
-- [ ] Natural orbitals
+- [x] Compact virtual orbital spaces 
 - [ ] MP2 and RPA
 - [ ] GPU acceleration 
 
@@ -41,23 +41,29 @@ using DFTK
 using PsiTK
 using PseudoPotentialData
 
-# Run standard HF calculation in DFTK (assumes lattice, atoms, positions setup)
-model = model_HF(lattice, atoms, positions; exx_kernel=Coulomb(ProbeCharge()))
+# Hartree-Fock for a helium atom in a box with DFTK
+He = ElementPsp(:He, PseudoFamily("dojo.nc.sr.pbe.v0_5.stringent.upf"))
+lattice = 10.0 * [1 0 0; 0 1 0; 0 0 1]
+model = model_HF(lattice, [He], [[0.5, 0.5, 0.5]]; exx_kernel=Coulomb(ProbeCharge()))
 basis = PlaneWaveBasis(model; Ecut=15, kgrid=[1, 1, 1])
-scfres = self_consistent_field(basis)
+scfres = self_consistent_field(basis; exxalg=DFTK.AceExx())
 
-# Use the occupied subspace only (if needed)
+# Occupied HF orbitals as the starting point
 occ_space = extract_occupied_space(OrbitalSpace(scfres))
 
-# Generate Density Specific Virtuals using PsiTK
+# Generate Density Specific Virtuals with PsiTK
 target = DensitySpecificVirtuals(scfres, occ_space; n_orbitals=50)
 dsv_space = generate_orbitals(target, occ_space)
 
-# Dump correlation tensors for Cc4s
-active_space = merge_spaces(occ_space, dsv_space)
-ΓmnG, G_vectors, kernel_fourier = compute_coulomb_vertex(active_space; callback = ShowProgress())
+# DSVs are not orthonormal and carry no Fock energies: canonicalize the active space
+# (diagonalize the Fock operator in the merged subspace) before it can be used
+active_space = canonicalize_orbitals(merge_spaces(occ_space, dsv_space), scfres.ham)
 
-dump_cc4s_files(active_space, ΓmnG, G_vectors, kernel_fourier; folder="cc4s_data")
+# Coulomb vertex in the plane-wave basis, compressed, and dumped for Cc4s
+ΓmnG, G_vectors, kernel_fourier = compute_coulomb_vertex(active_space; callback=ShowProgress())
+ΓmnF, singular_vectors = compress_coulomb_vertex(ΓmnG, CoulombGramian())
+dump_cc4s_files(active_space, ΓmnF, G_vectors, kernel_fourier;
+                coulomb_vertex_singular_vectors=singular_vectors, folder="cc4s_data")
 ```
 
 For a fully runnable script, please check out the `examples/` directory.

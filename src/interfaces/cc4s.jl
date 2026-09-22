@@ -126,6 +126,11 @@ function dump_cc4s_files(
     folder::AbstractString = joinpath(pwd(), "cc4s"),
     force = false,
 )
+    # Cc4s expects canonical HF orbitals: orthonormal, with Fock eigenvalues
+    if !active_space.is_orthonormal
+        error("Cc4s interface requires orthonormal canonical orbitals. " *
+              "Apply `canonicalize_orbitals` to the active space first.")
+    end
     mkpath(folder)
 
     # --- dump Eigenvalues
