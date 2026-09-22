@@ -17,279 +17,183 @@ function construct_stochastic_orbitals(N, kpt, orbitalType)
     return Matrix(qr_decomp.Q)
 end
 
-# --- Targets ---
+# --- Targets: which eigenvalue problem defines the virtual orbitals (physics) ---
 
 @doc raw"""
     DensitySpecificVirtuals(; n_orbitals)
 
-Target to compute compressed virtual orbitals (Density Specific Virtuals)
-by solving a generalized eigenvalue problem in the full virtual space:
+Target for [`generate_orbitals`](@ref): compressed virtual orbitals (Density Specific
+Virtuals) from the lowest eigenpairs of the generalized eigenvalue problem in the virtual space
 ```math
-\mathcal K \varphi  =  \lambda h \varphi 
+\mathcal K \varphi  =  \lambda h \varphi
 ```
 where $\mathcal K$ and $h$ are the Fock exchange operator and the Fock Hamiltonian, respectively.
 
-When generated, the orbitals returned ($\varphi_i$) will directly span the DSV subspace. 
-These orbitals will NOT be strictly orthogonalized initially, ensuring their orbital energies strictly match the generalized Rayleigh quotient ($\lambda_i = \langle \varphi_i | \mathcal K | \varphi_i \rangle / \langle \varphi_i | \mathcal h | \varphi_i \rangle$).
-They can be orthonormalized and canonicalized later using `canonicalize_orbitals`.
+The generated orbitals are NOT orthonormal (they are $h$-orthonormal), and their `eigenvalues`
+are the generalized Rayleigh quotients $\lambda_i$, not orbital energies. Use
+[`canonicalize_orbitals`](@ref) to obtain orthonormal orbitals with Fock energies.
 """
-struct DensitySpecificVirtuals{TH, TK}
+Base.@kwdef struct DensitySpecificVirtuals
     n_orbitals::Int
-    ham::TH  # The DFTK Hamiltonian
-    K::TK    # The Fock exchange operator
-end
-
-function DensitySpecificVirtuals(scfres, occ_space::OrbitalSpace; n_orbitals::Int)
-    basis = scfres.basis
-    ham = scfres.ham
-    ExactExchangeTerm = only([term for term in basis.terms if term isa DFTK.TermExactExchange])
-    _, K = DFTK.ene_ops(ExactExchangeTerm, basis, occ_space.ψ, occ_space.occupations)
-    return DensitySpecificVirtuals(n_orbitals, ham, K)
 end
 
 """
-    CanonicalVirtuals(; n_orbitals)
+    CanonicalVirtuals(; n_orbitals=:all)
 
-Target to compute canonical virtual orbitals by diagonalizing the Fock
-Hamiltonian. Set `n_orbitals = :all` to compute the full virtual plane-wave space.
+Target for [`generate_orbitals`](@ref): canonical virtual orbitals, i.e. the lowest
+eigenpairs of the Fock Hamiltonian in the virtual space. `n_orbitals = :all` yields the
+complete virtual plane-wave space.
 """
-struct CanonicalVirtuals{TH}
-    n_orbitals::Union{Int,Symbol}
-    ham::TH  # The DFTK Hamiltonian
-end
-
-function CanonicalVirtuals(scfres; n_orbitals)
-    return CanonicalVirtuals(n_orbitals, scfres.ham)
+Base.@kwdef struct CanonicalVirtuals
+    n_orbitals::Union{Int,Symbol} = :all
 end
 
 @doc raw"""
     MaximalExchangeVirtuals(; n_orbitals)
 
-Target to compute virtual orbitals that maximize exchange, by solving the eigenvalue problem:
+Target for [`generate_orbitals`](@ref): virtual orbitals maximizing the exchange
+interaction with the occupied space, i.e. the lowest (most negative) eigenpairs of
 ```math
-\mathcal K \varphi  =  \lambda \varphi 
+\mathcal K \varphi  =  \lambda \varphi
 ```
 where $\mathcal K$ is the Fock exchange operator.
 """
-struct MaximalExchangeVirtuals{TK}
+Base.@kwdef struct MaximalExchangeVirtuals
     n_orbitals::Int
-    K::TK    # The Fock exchange operator
 end
 
-function MaximalExchangeVirtuals(scfres::NamedTuple, occ_space::OrbitalSpace; n_orbitals::Int)
-    basis = scfres.basis
-    ExactExchangeTerm = only([term for term in basis.terms if term isa DFTK.TermExactExchange])
-    _, K = DFTK.ene_ops(ExactExchangeTerm, basis, occ_space.ψ, occ_space.occupations)
-    return MaximalExchangeVirtuals(n_orbitals, K)
+const VirtualOrbitalTarget =
+    Union{DensitySpecificVirtuals,CanonicalVirtuals,MaximalExchangeVirtuals}
+
+# --- Eigenvalue problems: per k-point (; A, B, ε_offset) such that the lowest eigenpairs
+#     of A φ = λ B φ are the wanted orbitals with eigenvalue λ + ε_offset ---
+
+# Fock operator with the occupied space pushed above the virtual spectrum
+function _levelshifted_fock(ham, occ_space, ik)
+    ε_homo = maximum(occ_space.eigenvalues[ik])
+    safe_shift = 1e-5            # keeps the shifted virtual spectrum strictly positive
+    penalty = 2 * ham.basis.Ecut # lifts the occupied space above all plane-wave energies
+    op = LevelShiftedOperator(ham[ik], occ_space.ψ[ik], ε_homo, safe_shift, penalty)
+    return op, ε_homo - safe_shift
 end
 
-# --- Generators ---
-
-"""
-    generate_orbitals(target::DensitySpecificVirtuals, occ_space, solver::LOBPCG)
-
-Generates DSVs using an iterative LOBPCG solver.
-"""
-function generate_orbitals(
-    target::DensitySpecificVirtuals,
-    occ_space::OrbitalSpace{B,T,R},
-    solver::LOBPCG,
-) where {B,T,R}
-    ham = target.ham
-    K = target.K
+# Fock exchange operator of the occupied orbitals, one block per k-point
+function _exchange_operator(ham, occ_space)
     basis = ham.basis
-    Ecut = basis.Ecut
+    term = only(t for t in basis.terms if t isa DFTK.TermExactExchange)
+    _, K = DFTK.ene_ops(term, basis, occ_space.ψ, occ_space.occupations)
+    return K
+end
 
-    ψ_dsv = Matrix{T}[]
-    eigenvalues_dsv = Vector{R}[]
-    occupations_dsv = Vector{R}[]
+# Exchange operator restricted to the virtual space: occupied components are shifted to
+# positive energies, so they are never among the lowest (negative) exchange eigenvalues
+function _projected_exchange(K, occ_space, ik)
+    shift = abs(minimum(minimum.(occ_space.eigenvalues))) + 2.0
+    return ProjectedShiftedOperator(K[ik], occ_space.ψ[ik], shift)
+end
 
-    for ik = 1:length(basis.kpoints)
-        kpt = basis.kpoints[ik]
-        Kk = K[ik]
-        ψocck = occ_space.ψ[ik]
-        Nfull = length(kpt.G_vectors)
-
-        if target.n_orbitals > 0.1 * Nfull
-            @warn "DSV n_orbitals ($(target.n_orbitals)) is > 10% of plane waves ($Nfull). Full diagonalization might be faster."
-        end
-
-        # Stochastic guess
-        ϕk = construct_stochastic_orbitals(target.n_orbitals, kpt, T)
-
-        # Build LevelShifted operators
-        ε_homo = maximum(occ_space.eigenvalues[ik])
-        ham_hf_levelshifted =
-            LevelShiftedOperator(ham[ik], ψocck, ε_homo, 1e-5, 2 * Ecut)
-
-        # Minimum HF eigenvalue over all k-points for safe shift
-        shift = abs(minimum(minimum.(occ_space.eigenvalues))) + 2.0
-        Kk_virt = ProjectedShiftedOperator(Kk, ψocck, shift)
-
-        kinetic_preconditioner = DFTK.PreconditionerTPA(ham[ik].basis, kpt)
-
-        # LOBPCG
-        dsv = lobpcg(
-            Kk_virt,
-            ϕk,
-            ham_hf_levelshifted,
-            kinetic_preconditioner,
-            solver.tol,
-            solver.maxiter,
-            callback = DefaultLobpcgCallback(),
-        )
-
-        push!(ψ_dsv, dsv.X)
-        push!(eigenvalues_dsv, dsv.λ)
-        push!(occupations_dsv, zeros(R, target.n_orbitals))
+function _eigenproblems(::CanonicalVirtuals, occ_space, ham)
+    return map(eachindex(ham.basis.kpoints)) do ik
+        A, ε_offset = _levelshifted_fock(ham, occ_space, ik)
+        (; A, B = I, ε_offset)
     end
-
-    return OrbitalSpace{B,T,R}(basis, ψ_dsv, eigenvalues_dsv, occupations_dsv, occ_space.εF, false)
 end
 
-"""
-    generate_orbitals(target::CanonicalVirtuals, occ_space, solver::LOBPCG)
+function _eigenproblems(::DensitySpecificVirtuals, occ_space, ham)
+    K = _exchange_operator(ham, occ_space)
+    return map(eachindex(ham.basis.kpoints)) do ik
+        B, ε_offset = _levelshifted_fock(ham, occ_space, ik)
+        # eigenvalues are Rayleigh quotients λ = <φ|K|φ>/<φ|h|φ>, reported as they are
+        (; A = _projected_exchange(K, occ_space, ik), B, ε_offset = zero(ε_offset))
+    end
+end
 
-Generates canonical virtuals using an iterative LOBPCG solver on the Fock operator.
+function _eigenproblems(::MaximalExchangeVirtuals, occ_space, ham)
+    K = _exchange_operator(ham, occ_space)
+    return map(eachindex(ham.basis.kpoints)) do ik
+        A = _projected_exchange(K, occ_space, ik)
+        (; A, B = I, ε_offset = zero(eltype(occ_space.eigenvalues[ik])))
+    end
+end
+
+function _n_orbitals(target::VirtualOrbitalTarget, occ_space, ik)
+    if target.n_orbitals === :all
+        return length(occ_space.basis.kpoints[ik].G_vectors) - size(occ_space.ψ[ik], 2)
+    end
+    return target.n_orbitals
+end
+
+# Generalized eigenvectors (B ≠ I) are only B-orthonormal
+_is_orthonormal(::CanonicalVirtuals) = true
+_is_orthonormal(::DensitySpecificVirtuals) = false
+_is_orthonormal(::MaximalExchangeVirtuals) = true
+
+_default_solver(::VirtualOrbitalTarget) = LOBPCG()
+_default_solver(target::CanonicalVirtuals) =
+    target.n_orbitals === :all ? FullDiagonalization() : LOBPCG()
+
+# --- Generator ---
+
+"""
+    generate_orbitals(target, occ_space::OrbitalSpace, ham; solver=LOBPCG())
+
+Generate virtual orbitals orthogonal to the occupied space `occ_space` by solving the
+eigenvalue problem defined by `target` with the eigensolver `solver`.
+
+# Arguments
+- `target`: [`CanonicalVirtuals`](@ref), [`DensitySpecificVirtuals`](@ref) or
+  [`MaximalExchangeVirtuals`](@ref)
+- `occ_space`: the occupied orbitals (define the exchange operator and are projected out)
+- `ham`: the DFTK Hamiltonian of the converged Hartree-Fock calculation (`scfres.ham`)
+- `solver`: [`LOBPCG`](@ref), [`FullDiagonalization`](@ref) or [`BlockDavidson`](@ref).
+  Defaults to `LOBPCG()`, or `FullDiagonalization()` for `CanonicalVirtuals(n_orbitals=:all)`
+
+# Returns
+An `OrbitalSpace` with `target.n_orbitals` orbitals per k-point.
 """
 function generate_orbitals(
-    target::CanonicalVirtuals,
-    occ_space::OrbitalSpace{B,T,R},
-    solver::LOBPCG,
-) where {B,T,R}
-    ham = target.ham
+    target::VirtualOrbitalTarget,
+    occ_space::OrbitalSpace{TB,T,R},
+    ham;
+    solver = _default_solver(target),
+) where {TB,T,R}
     basis = ham.basis
-    Ecut = basis.Ecut
+    problems = _eigenproblems(target, occ_space, ham)
 
     ψ_virt = Matrix{T}[]
     eigenvalues_virt = Vector{R}[]
     occupations_virt = Vector{R}[]
 
-    for ik = 1:length(basis.kpoints)
-        kpt = basis.kpoints[ik]
+    for (ik, kpt) in enumerate(basis.kpoints)
+        n_orbitals = _n_orbitals(target, occ_space, ik)
         ψocck = occ_space.ψ[ik]
         Nfull = length(kpt.G_vectors)
 
-        N_virt = target.n_orbitals === :all ? (Nfull - size(ψocck, 2)) : target.n_orbitals
-
-        if N_virt > 0.1 * Nfull
-            @warn "CanonicalVirtuals n_orbitals ($N_virt) is > 10% of plane waves ($Nfull). FullDiagonalization might be faster."
+        if solver isa LOBPCG && n_orbitals > 0.1 * Nfull
+            @warn "n_orbitals ($n_orbitals) is > 10% of plane waves ($Nfull). " *
+                  "FullDiagonalization() might be faster."
         end
 
-        ϕk_canon = construct_stochastic_orbitals(N_virt, kpt, T)
-        ϕk_canon .-= ψocck * (ψocck' * ϕk_canon)   # Project out occupied
-        ϕk_canon = Matrix(qr(ϕk_canon).Q)
+        # Stochastic initial guess in the orthogonal complement of the occupied space
+        X0 = construct_stochastic_orbitals(n_orbitals, kpt, T)
+        X0 .-= ψocck * (ψocck' * X0)
+        X0 = Matrix(qr(X0).Q)
 
-        ε_homo = maximum(occ_space.eigenvalues[ik])
-        ham_hf_levelshifted =
-            LevelShiftedOperator(ham[ik], ψocck, ε_homo, 1e-5, 2 * Ecut)
-        kinetic_preconditioner = DFTK.PreconditionerTPA(ham[ik].basis, kpt)
+        preconditioner = DFTK.PreconditionerTPA(basis, kpt)
+        (; A, B, ε_offset) = problems[ik]
+        (; λ, X) = _solve(A, B, X0, preconditioner, solver)
 
-        canon_res = lobpcg(
-            ham_hf_levelshifted,
-            ϕk_canon,
-            IdentityOperator(Nfull, T),
-            kinetic_preconditioner,
-            solver.tol,
-            solver.maxiter,
-            callback = DefaultLobpcgCallback(),
-        )
-
-        ε_virtk =
-            canon_res.λ .+ ham_hf_levelshifted.ε_homo .- ham_hf_levelshifted.safe_shift
-
-        push!(ψ_virt, canon_res.X)
-        push!(eigenvalues_virt, ε_virtk)
-        push!(occupations_virt, zeros(R, N_virt))
+        push!(ψ_virt, X)
+        push!(eigenvalues_virt, λ .+ ε_offset)
+        push!(occupations_virt, zeros(R, n_orbitals))
     end
 
-    return OrbitalSpace{B,T,R}(
+    return OrbitalSpace{TB,T,R}(
         basis,
         ψ_virt,
         eigenvalues_virt,
         occupations_virt,
         occ_space.εF,
-        true # canonical virtuals are strictly orthonormal
+        _is_orthonormal(target),
     )
-end
-
-"""
-    generate_orbitals(target::CanonicalVirtuals, occ_space, solver::FullDiagonalization)
-
-Generates canonical virtuals using full dense exact diagonalization on the Fock operator.
-"""
-function generate_orbitals(
-    target::CanonicalVirtuals,
-    occ_space::OrbitalSpace{B,T,R},
-    solver::FullDiagonalization,
-) where {B,T,R}
-    ham = target.ham
-    basis = ham.basis
-
-    ψ_virt = Matrix{T}[]
-    eigenvalues_virt = Vector{R}[]
-    occupations_virt = Vector{R}[]
-
-    for ik = 1:length(basis.kpoints)
-        kpt = basis.kpoints[ik]
-        ψocck = occ_space.ψ[ik]
-        Nfull = length(kpt.G_vectors)
-        N_virt = target.n_orbitals === :all ? (Nfull - size(ψocck, 2)) : target.n_orbitals
-
-        # Shift the occupied states using LevelShiftedOperator, identical to LOBPCG
-        ε_homo = maximum(occ_space.eigenvalues[ik])
-        Ecut = basis.Ecut
-        ham_hf_levelshifted = LevelShiftedOperator(ham[ik], ψocck, ε_homo, 1e-5, 2 * Ecut)
-
-        # Build the full identity matrix for this k-point space to compute the dense Hamiltonian
-        I_mat = Matrix{T}(I, Nfull, Nfull)
-        H_dense = Hermitian(Matrix(ham_hf_levelshifted * I_mat))
-
-        # Diagonalize the full matrix
-        eigen_res = eigen(H_dense)
-
-        # Extract the lowest N_virt eigenvalues and eigenvectors (the true virtual states)
-        indices = 1:N_virt
-
-        # Shift the eigenvalues back since LevelShiftedOperator shifts the whole spectrum
-        ε_virtk = eigen_res.values[indices] .+ ham_hf_levelshifted.ε_homo .- ham_hf_levelshifted.safe_shift
-
-        push!(ψ_virt, eigen_res.vectors[:, indices])
-        push!(eigenvalues_virt, ε_virtk)
-        push!(occupations_virt, zeros(R, N_virt))
-    end
-
-    return OrbitalSpace{B,T,R}(
-        basis,
-        ψ_virt,
-        eigenvalues_virt,
-        occupations_virt,
-        occ_space.εF,
-        true # canonical virtuals are strictly orthonormal
-    )
-end
-
-"""
-    generate_orbitals(target::MaximalExchangeVirtuals, occ_space, solver::BlockDavidson)
-
-Generates Maximal Exchange Virtuals by solving the eigenvalue problem K φ = λ φ using the BlockDavidson solver.
-"""
-function generate_orbitals(
-    target::MaximalExchangeVirtuals,
-    occ_space::OrbitalSpace{B,T,R},
-    solver::BlockDavidson,
-) where {B,T,R}
-    # TODO: Mereto
-    error("Not implemented yet.")
-end
-
-# --- Fallbacks ---
-
-function generate_orbitals(target::DensitySpecificVirtuals, occ_space)
-    generate_orbitals(target, occ_space, LOBPCG())
-end
-
-function generate_orbitals(target::CanonicalVirtuals, occ_space)
-    solver = target.n_orbitals === :all ? FullDiagonalization() : LOBPCG()
-    generate_orbitals(target, occ_space, solver)
 end

@@ -93,21 +93,3 @@ end
 Base.size(op::ProjectedShiftedOperator, args...) = size(op.base_op, args...)
 Base.eltype(op::ProjectedShiftedOperator) = eltype(op.base_op)
 LinearAlgebra.ishermitian(op::ProjectedShiftedOperator) = ishermitian(op.base_op)
-
-
-# Identity operator — used as B = I in the standard eigenproblem for canonical virtuals
-struct IdentityOperator{T}
-    n::Int
-end
-
-IdentityOperator(n::Int, ::Type{T}) where {T} = IdentityOperator{T}(n)
-
-function LinearAlgebra.mul!(Y, ::IdentityOperator, X)
-    copy!(Y, X)
-    return Y
-end
-
-Base.:*(::IdentityOperator, X::AbstractMatrix) = copy(X)
-Base.size(op::IdentityOperator, args...) = (op.n, op.n)[args...]
-Base.eltype(::IdentityOperator{T}) where {T} = T
-LinearAlgebra.ishermitian(::IdentityOperator) = true

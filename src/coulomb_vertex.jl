@@ -105,10 +105,8 @@ v(\bm G) = \frac{4π}{\bm G^2}
   e.g. `callback=ShowProgress()` for a progress bar (default: no output)
 
 # Returns
-A tuple `(ΓmnG, G_vectors, kernel_fourier)`:
-- `ΓmnG`: the Coulomb vertex tensor in the uncompressed plane-wave basis.
-- `G_vectors`: the corresponding plane-wave vectors.
-- `kernel_fourier`: the evaluated interaction kernel at the returned G vectors.
+A [`DensityFitting`](@ref) holding the uncompressed vertex `Γ` (shape
+`(nk, n_bands_bra, nk, n_bands_ket, nG)`), its `G_vectors` and the `kernel_fourier`.
 """
 function compute_coulomb_vertex(
     bra_space::OrbitalSpace,
@@ -136,7 +134,7 @@ function compute_coulomb_vertex(
     ΓmnG = ρmnG
     ΓmnG .*= reshape(sqrt.(kernel_fourier), 1, 1, 1, 1, :)
 
-    return ΓmnG, G_vectors, kernel_fourier
+    return DensityFitting(ΓmnG, G_vectors, kernel_fourier, nothing)
 end
 
 function compute_coulomb_vertex(space::OrbitalSpace; n_bands = size(space.ψ[1], 2), kwargs...)
@@ -219,12 +217,42 @@ end
 
 
 @doc raw"""
-    compress_coulomb_vertex(ΓmnG::AbstractArray{T,5}, strategy)
+    DensityFitting
 
-Compress the Coulomb vertex along its plane-wave axis $\bm G$ into a smaller auxiliary
-field index $F$,
+Density-fitting (resolution-of-identity) factorization of the electron repulsion integrals
 ```math
-Γ_{mn F} = \sum_{\bm G} Γ_{mn \bm G} \, U_{\bm G F}
+(pr|qs) \propto \sum_F Γ_{rpF}^∗ \, Γ_{qsF}
+```
+i.e. the Coulomb vertex $Γ$ together with the auxiliary basis $F$ it is expressed in.
+
+# Fields
+- `Γ`: the Coulomb vertex tensor of shape `(nk, n_bands, nk, n_bands, NF)`. The auxiliary
+  index runs over the plane waves `G_vectors` (uncompressed) or over the compressed index
+- `G_vectors`: the plane waves of the uncompressed vertex
+- `kernel_fourier`: the interaction kernel evaluated at `G_vectors`
+- `singular_vectors`: the transformation of shape `(NG, NF)` from the plane waves to the
+  compressed auxiliary index, or `nothing` if uncompressed
+
+See [`compute_coulomb_vertex`](@ref) and [`compress_coulomb_vertex`](@ref).
+"""
+struct DensityFitting{
+    TΓ<:AbstractArray,
+    TG<:AbstractVector,
+    TV<:AbstractVector,
+    TU<:Union{Nothing,AbstractMatrix},
+}
+    Γ::TΓ
+    G_vectors::TG
+    kernel_fourier::TV
+    singular_vectors::TU
+end
+
+@doc raw"""
+    compress_coulomb_vertex(fitting::DensityFitting, strategy)
+
+Compress the Coulomb vertex along its auxiliary axis into a smaller auxiliary index $F$,
+```math
+Γ_{mn F} = \sum_{G} Γ_{mn G} \, U_{G F}
 ```
 where the columns of the transformation $U$ span the dominant subspace of the Coulomb
 Gramian $\Gamma^\dagger \Gamma$. How $U$ is determined depends on `strategy`:
@@ -232,15 +260,19 @@ Gramian $\Gamma^\dagger \Gamma$. How $U$ is determined depends on `strategy`:
 - [`AdaptiveRandomizedSVD`](@ref): randomized range finder followed by diagonalization
 
 # Arguments
-- `ΓmnG`: the uncompressed Coulomb vertex as returned by [`compute_coulomb_vertex`](@ref)
+- `fitting`: the [`DensityFitting`](@ref) from [`compute_coulomb_vertex`](@ref); compressing
+  an already compressed fitting accumulates the transformations
 - `strategy`: the compression strategy, carrying its own threshold
 
 # Returns
-A tuple `(ΓmnF, coulomb_vertex_singular_vectors)`:
-- `ΓmnF`: the compressed vertex of shape `(nk, n_bands, nk, n_bands, NF)`
-- `coulomb_vertex_singular_vectors`: the transformation matrix $U$ of shape `(NG, NF)`
+A [`DensityFitting`](@ref) with the compressed `Γ` of shape `(nk, n_bands, nk, n_bands, NF)`
+and the accumulated `singular_vectors` of shape `(NG, NF)`.
 """
-function compress_coulomb_vertex end
+function compress_coulomb_vertex(fitting::DensityFitting, strategy)
+    ΓmnF, U = _compress_coulomb_vertex(fitting.Γ, strategy)
+    singular_vectors = isnothing(fitting.singular_vectors) ? U : fitting.singular_vectors * U
+    return DensityFitting(ΓmnF, fitting.G_vectors, fitting.kernel_fourier, singular_vectors)
+end
 
 @doc raw"""
     CoulombGramian(; thresh=1e-6)
@@ -256,7 +288,7 @@ where the columns of $U$ are restricted such that $|\lambda| >$ `thresh`.
 Base.@kwdef struct CoulombGramian
     thresh::Float64 = 1e-6
 end
-function compress_coulomb_vertex(
+function _compress_coulomb_vertex(
     ΓmnG::AbstractArray{T,5},
     strategy::CoulombGramian,
 ) where {T}
@@ -313,7 +345,7 @@ Base.@kwdef struct AdaptiveRandomizedSVD
     thresh::Float64 = 1e-6
     n_test_vectors::Int = 10
 end
-function compress_coulomb_vertex(
+function _compress_coulomb_vertex(
     ΓmnG::AbstractArray{T,5},
     strategy::AdaptiveRandomizedSVD,
 ) where {T}

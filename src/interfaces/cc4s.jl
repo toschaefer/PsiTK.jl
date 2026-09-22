@@ -83,10 +83,7 @@ end
 """
     dump_cc4s_files(
         active_space::OrbitalSpace,
-        ΓmnG::AbstractArray,
-        G_vectors::AbstractVector,
-        kernel_fourier::AbstractVector;
-        coulomb_vertex_singular_vectors::Union{AbstractMatrix, Nothing} = nothing,
+        fitting::DensityFitting;
         folder::AbstractString=joinpath(pwd(), "cc4s"),
         force=false
     )
@@ -98,19 +95,14 @@ Write Cc4s input files (*.yaml and *.elements):
 - DeltaIntegralsPPHH
 - GridVectors
 - CoulombPotential
-- CoulombVertexSingularVectors (only if `coulomb_vertex_singular_vectors` is provided)
+- CoulombVertexSingularVectors (only if `fitting` is compressed)
 
 Requires a Gamma-only calculation with integer occupations.
 
 # Arguments
 - `active_space`: the `OrbitalSpace` containing the bands (occupations and eigenvalues)
-- `ΓmnG`: the Coulomb vertex, either uncompressed from [`compute_coulomb_vertex`](@ref)
-  or compressed by [`compress_coulomb_vertex`](@ref)
-- `G_vectors`: the plane-wave vectors of the uncompressed vertex
-- `kernel_fourier`: the interaction kernel evaluated at `G_vectors`
-  (both as returned by [`compute_coulomb_vertex`](@ref))
-- `coulomb_vertex_singular_vectors`: transformation matrix from
-  [`compress_coulomb_vertex`](@ref)
+- `fitting`: the [`DensityFitting`](@ref) of the active space, uncompressed from
+  [`compute_coulomb_vertex`](@ref) or compressed by [`compress_coulomb_vertex`](@ref)
 - `folder`: the target folder (created if missing)
 - `force`: if true existing files will be overwritten
 
@@ -119,10 +111,7 @@ The list of written file paths.
 """
 function dump_cc4s_files(
     active_space::OrbitalSpace,
-    ΓmnG::AbstractArray,
-    G_vectors::AbstractVector,
-    kernel_fourier::AbstractVector;
-    coulomb_vertex_singular_vectors::Union{AbstractMatrix, Nothing} = nothing,
+    fitting::DensityFitting;
     folder::AbstractString = joinpath(pwd(), "cc4s"),
     force = false,
 )
@@ -149,7 +138,7 @@ function dump_cc4s_files(
     files_ene = write_eigenenergies(folder, eigenvalues, εF; force)
 
     # --- dump Coulomb Vertex
-    files_coul = write_coulomb_vertex(folder, ΓmnG; force)
+    files_coul = write_coulomb_vertex(folder, fitting.Γ; force)
 
     # --- Split space by Fermi Energy for Delta Integrals
     idx_holes = findall(ε -> ε <= εF, eigenvalues[1])
@@ -200,13 +189,14 @@ function dump_cc4s_files(
     )
 
     # --- dump Grid Vectors
-    files_grid = write_grid_vectors(folder, active_space.basis, G_vectors; force)
+    files_grid = write_grid_vectors(folder, active_space.basis, fitting.G_vectors; force)
 
     # --- dump Coulomb Potential
-    files_pot = write_coulomb_potential(folder, kernel_fourier; force)
+    files_pot = write_coulomb_potential(folder, fitting.kernel_fourier; force)
 
     # --- dump Coulomb Vertex Singular Vectors
-    files_u = isnothing(coulomb_vertex_singular_vectors) ? String[] : write_singular_vectors(folder, coulomb_vertex_singular_vectors; force)
+    U = fitting.singular_vectors
+    files_u = isnothing(U) ? String[] : write_singular_vectors(folder, U; force)
 
     return vcat(files_ene, files_coul, files_hh, files_pphh, files_grid, files_pot, files_u)
 end

@@ -1,6 +1,6 @@
 export merge_spaces
 export canonicalize_orbitals
-export split_space_occupied_virtual, extract_occupied_space, extract_virtual_space
+export split_occupied_virtual
 export select_orbitals
 
 using LinearAlgebra
@@ -125,37 +125,14 @@ end
 
 
 """
-    split_space_occupied_virtual(space::OrbitalSpace; threshold=1e-6)
+    split_occupied_virtual(space::OrbitalSpace; threshold=1e-6)
 
-Splits the given `space` into an occupied and an empty (virtual) `OrbitalSpace` based on the 
-fractional occupation `threshold`.
-Returns a tuple `(occupied_space, virtual_space)`. Note that this allocates two new `OrbitalSpace` objects and copies the data. If you only need one, use `extract_occupied_space` or `extract_virtual_space`.
+Split `space` into its occupied and virtual orbitals, i.e. those with fractional
+occupation above resp. below `threshold`. Returns a tuple `(occupied_space, virtual_space)`.
 """
-function split_space_occupied_virtual(space::OrbitalSpace; threshold=1e-6)
+function split_occupied_virtual(space::OrbitalSpace; threshold = 1e-6)
     masks = DFTK.occupied_empty_masks(space.occupations, threshold)
-    occ_space = select_orbitals(space, masks.mask_occ)
-    empty_space = select_orbitals(space, masks.mask_empty)
-    return occ_space, empty_space
-end
-
-"""
-    extract_occupied_space(space::OrbitalSpace; threshold=1e-6)
-
-Extracts the occupied subspace from the given `space` based on the fractional occupation `threshold`.
-"""
-function extract_occupied_space(space::OrbitalSpace; threshold=1e-6)
-    masks = DFTK.occupied_empty_masks(space.occupations, threshold)
-    return select_orbitals(space, masks.mask_occ)
-end
-
-"""
-    extract_virtual_space(space::OrbitalSpace; threshold=1e-6)
-
-Extracts the empty (virtual) subspace from the given `space` based on the fractional occupation `threshold`.
-"""
-function extract_virtual_space(space::OrbitalSpace; threshold=1e-6)
-    masks = DFTK.occupied_empty_masks(space.occupations, threshold)
-    return select_orbitals(space, masks.mask_empty)
+    return select_orbitals(space, masks.mask_occ), select_orbitals(space, masks.mask_empty)
 end
 
 """

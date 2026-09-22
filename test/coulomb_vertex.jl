@@ -3,28 +3,24 @@
 
     scfres = TestSystems.setup_water_hf(n_bands_converge=8)
     space = OrbitalSpace(scfres)
-
-    ΓmnG, G_vectors, kernel_fourier = compute_coulomb_vertex(space; n_bands = scfres.n_bands_converge)
-
-    # Check dimensions
     nkpt = length(scfres.basis.kpoints)
     nbands = scfres.n_bands_converge
 
-    # For a gamma point only calculation (nkpt=1), or generally:
-    # Dimensions should be (nkpt, nbands, nkpt, nbands, nG_reduced)
-    @test size(ΓmnG)[1:4] == (nkpt, nbands, nkpt, nbands)
-    @test size(ΓmnG, 5) > 0 # Some G vectors must exist
+    fitting = compute_coulomb_vertex(space; n_bands = nbands)
+    (; Γ, G_vectors, kernel_fourier) = fitting
+    @test isnothing(fitting.singular_vectors)
 
-    # Calculate a fingerprint scalar for regression testing
-    val = norm(ΓmnG)
+    # Dimensions (nkpt, nbands, nkpt, nbands, nG_reduced)
+    @test size(Γ)[1:4] == (nkpt, nbands, nkpt, nbands)
+    @test size(Γ, 5) == length(G_vectors) == length(kernel_fourier) > 0
 
-    # Check against reference value
-    @test isapprox(val, 2.318769223791925, rtol = 1e-6)
+    # Fingerprint for regression testing
+    @test isapprox(norm(Γ), 2.318769223791925, rtol = 1e-6)
 
     # Bare overlap densities: Γ = √v ⊙ ρ on the same G vectors
     ρmnG, G_vectors_ρ = compute_overlap_densities(space; n_bands = nbands, Ecut_ratio = 2/3)
     @test G_vectors_ρ == G_vectors
-    @test ρmnG .* reshape(sqrt.(kernel_fourier), 1, 1, 1, 1, :) ≈ ΓmnG
+    @test ρmnG .* reshape(sqrt.(kernel_fourier), 1, 1, 1, 1, :) ≈ Γ
 
     # Orthonormality: ρ_mn(G=0) ∝ δ_mn
     iG0 = findfirst(iszero, G_vectors)
@@ -48,23 +44,30 @@
 
     # The Cc4s dump refuses non-orthonormal (non-canonical) spaces
     space_nonortho = OrbitalSpace(space.basis, space.ψ, space.eigenvalues, space.occupations, space.εF, false)
-    @test_throws ErrorException dump_cc4s_files(space_nonortho, ΓmnG, G_vectors, kernel_fourier; folder = mktempdir())
+    @test_throws ErrorException dump_cc4s_files(space_nonortho, fitting; folder = mktempdir())
 
-    # Test CoulombGramian compression
-    cg_alg = CoulombGramian(thresh = 1e-3)
-    ΓmnG_cg, _ = compress_coulomb_vertex(ΓmnG, cg_alg)
-    val_cg = norm(ΓmnG_cg)
+    # CoulombGramian compression: Γ_F = Γ_G U with the returned singular vectors
+    fitting_cg = compress_coulomb_vertex(fitting, CoulombGramian(thresh = 1e-3))
+    val_cg = norm(fitting_cg.Γ)
     @test isapprox(val_cg, 2.3182425676526193, rtol = 1e-6)
-    @test size(ΓmnG_cg)[1:4] == (nkpt, nbands, nkpt, nbands)
-    @test size(ΓmnG_cg, 5) < size(ΓmnG, 5)
+    @test size(fitting_cg.Γ)[1:4] == (nkpt, nbands, nkpt, nbands)
+    NG, NF = size(fitting_cg.singular_vectors)
+    @test NG == size(Γ, 5) && NF == size(fitting_cg.Γ, 5) < NG
+    Γmat = reshape(Γ, :, NG)
+    @test reshape(Γmat * fitting_cg.singular_vectors, size(fitting_cg.Γ)) ≈ fitting_cg.Γ
+    @test fitting_cg.G_vectors === G_vectors && fitting_cg.kernel_fourier === kernel_fourier
 
-    # Test AdaptiveRandomizedSVD compression
-    svd_alg = AdaptiveRandomizedSVD(thresh = 1e-3)
-    ΓmnG_svd, _ = compress_coulomb_vertex(ΓmnG, svd_alg)
-    val_svd = norm(ΓmnG_svd)
+    # AdaptiveRandomizedSVD compression
+    fitting_svd = compress_coulomb_vertex(fitting, AdaptiveRandomizedSVD(thresh = 1e-3))
+    val_svd = norm(fitting_svd.Γ)
     # The randomized subspace can only lose spectral weight w.r.t. the exact Gramian result
     @test val_svd <= val_cg * (1 + 1e-10)
     @test isapprox(val_svd, val_cg, rtol = 1e-3)
-    @test size(ΓmnG_svd)[1:4] == (nkpt, nbands, nkpt, nbands)
-    @test size(ΓmnG_svd, 5) < size(ΓmnG, 5)
+    @test size(fitting_svd.Γ)[1:4] == (nkpt, nbands, nkpt, nbands)
+    @test size(fitting_svd.Γ, 5) < size(Γ, 5)
+
+    # Compressing twice accumulates the transformations
+    fitting_cg2 = compress_coulomb_vertex(fitting_cg, CoulombGramian(thresh = 1e-2))
+    @test size(fitting_cg2.singular_vectors, 1) == NG
+    @test reshape(Γmat * fitting_cg2.singular_vectors, size(fitting_cg2.Γ)) ≈ fitting_cg2.Γ
 end

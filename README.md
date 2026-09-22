@@ -49,21 +49,20 @@ basis = PlaneWaveBasis(model; Ecut=15, kgrid=[1, 1, 1])
 scfres = self_consistent_field(basis; exxalg=DFTK.AceExx())
 
 # Occupied HF orbitals as the starting point
-occ_space = extract_occupied_space(OrbitalSpace(scfres))
+occ_space, _ = split_occupied_virtual(OrbitalSpace(scfres))
 
 # Generate Density Specific Virtuals with PsiTK
-target = DensitySpecificVirtuals(scfres, occ_space; n_orbitals=50)
-dsv_space = generate_orbitals(target, occ_space)
+dsv_space = generate_orbitals(DensitySpecificVirtuals(n_orbitals=50), occ_space, scfres.ham)
 
 # DSVs are not orthonormal and carry no Fock energies: canonicalize the active space
 # (diagonalize the Fock operator in the merged subspace) before it can be used
 active_space = canonicalize_orbitals(merge_spaces(occ_space, dsv_space), scfres.ham)
 
-# Coulomb vertex in the plane-wave basis, compressed, and dumped for Cc4s
-ΓmnG, G_vectors, kernel_fourier = compute_coulomb_vertex(active_space; callback=ShowProgress())
-ΓmnF, singular_vectors = compress_coulomb_vertex(ΓmnG, CoulombGramian())
-dump_cc4s_files(active_space, ΓmnF, G_vectors, kernel_fourier;
-                coulomb_vertex_singular_vectors=singular_vectors, folder="cc4s_data")
+# Density fitting of the electron repulsion integrals: Coulomb vertex in the plane-wave
+# basis, compressed to a small auxiliary basis, and dumped for Cc4s
+fitting = compute_coulomb_vertex(active_space; callback=ShowProgress())
+fitting = compress_coulomb_vertex(fitting, CoulombGramian())
+dump_cc4s_files(active_space, fitting; folder="cc4s_data")
 ```
 
 For a fully runnable script, please check out the `examples/` directory.

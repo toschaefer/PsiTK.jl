@@ -39,32 +39,27 @@ function main()
     )
 
     # Occupied HF orbitals as the starting point
-    occ_space = extract_occupied_space(OrbitalSpace(scfres_hf))
+    occ_space, _ = split_occupied_virtual(OrbitalSpace(scfres_hf))
 
     # Generate a compressed virtual space (44 Density Specific Virtuals)
     println("Compute DSVs")
-    target = DensitySpecificVirtuals(scfres_hf, occ_space; n_orbitals = 44)
-    dsv_space = generate_orbitals(target, occ_space)
+    target = DensitySpecificVirtuals(n_orbitals = 44)
+    dsv_space = generate_orbitals(target, occ_space, scfres_hf.ham)
 
     # DSVs are not orthonormal and carry no Fock energies: canonicalize the active space
     # (diagonalize the Fock operator in the merged subspace) before it can be used
     println("Canonicalize Active Space")
     active_space = canonicalize_orbitals(merge_spaces(occ_space, dsv_space), scfres_hf.ham)
 
-    # Compute the Coulomb Vertex for the Active Space
+    # Density fitting of the electron repulsion integrals: Coulomb vertex in the
+    # plane-wave basis, compressed to a small auxiliary basis
     println("Compute Coulomb Vertex")
-    ΓmnG, G_vectors, kernel_fourier = compute_coulomb_vertex(active_space; callback = ShowProgress())
-    vertex_alg = CoulombGramian()
-    ΓmnF, coulomb_vertex_singular_vectors = compress_coulomb_vertex(ΓmnG, vertex_alg)
+    fitting = compute_coulomb_vertex(active_space; callback = ShowProgress())
+    fitting = compress_coulomb_vertex(fitting, CoulombGramian())
 
     # Dump to the specific correlation solver (Cc4s)
     println("prepare and dump Cc4s files")
-    dump_cc4s_files(
-        active_space, ΓmnF, G_vectors, kernel_fourier;
-        coulomb_vertex_singular_vectors = coulomb_vertex_singular_vectors,
-        folder = @__DIR__,
-        force = true,
-    )
+    dump_cc4s_files(active_space, fitting; folder = @__DIR__, force = true)
 
     println("done")
 end
