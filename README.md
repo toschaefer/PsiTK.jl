@@ -72,7 +72,7 @@ For a fully runnable script, please check out the `examples/` directory.
 We welcome contributions from the scientific community! 
 
 - If you encounter a bug, have a feature request, or need help using PsiTK, please open an issue on our [GitHub Issues tracker](https://github.com/toschaefer/PsiTK.jl/issues).
-- If you'd like to contribute code, please submit a Pull Request. We recommend opening an issue first to discuss your planned changes.
+- If you'd like to contribute code, please submit a Pull Request. We recommend opening an issue first to discuss your planned changes. [CONTRIBUTING.md](CONTRIBUTING.md) explains the code design and how to extend it.
 
 ## Citation
 
