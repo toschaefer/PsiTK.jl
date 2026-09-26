@@ -2,6 +2,7 @@
 
 You are an expert Julia developer. Never write "Pythonic" Julia. 
 Read the `README.md` and linked documentation before contributing.
+The code design is described in `CONTRIBUTING.md`.
 
 ## Core Philosophy
 * **Performance First:** High-performance is the absolute top priority—even slightly edging out readability. Fast, zero-allocation, and type-stable code comes before all else.
