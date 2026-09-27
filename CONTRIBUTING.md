@@ -12,10 +12,10 @@ Questions? Open an issue.
 
 ## Code design
 
-PsiTK builds on DFTK's plane-wave infrastructure (`PlaneWaveBasis`, FFTs, Hamiltonian and
+PsiTK builds on DFTK's plane-wave infrastructure (e.g. `PlaneWaveBasis`, FFTs, Hamiltonian, 
 exchange operators) and follows its pattern: *nouns* are plain structs that carry either data
 or configuration, never both; *verbs* are functions that take the data as arguments and the
-configuration as a dispatch argument.
+configuration as a dispatch argument. Some examples:
 
 | noun | role | lives in |
 |---|---|---|
@@ -39,7 +39,7 @@ dump_cc4s_files(active_space, fitting)                                    # src/
 returns the operators `(; A, B, ε_offset)` per k-point, `_solve(A, B, X0, P, solver)` returns
 the lowest eigenpairs, so every target works with every solver.
 
-To add
+To add, for instance, 
 
 - **a virtual-orbital target:** a configuration struct with an `n_orbitals` field, added to
   the `VirtualOrbitalTarget` union, plus `_eigenproblems` and `_is_orthonormal` methods in
