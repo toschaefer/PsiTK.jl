@@ -1,16 +1,10 @@
-export DensitySpecificVirtuals, CanonicalVirtuals, MaximalExchangeVirtuals
-export generate_orbitals
-
-using LinearAlgebra
-using DFTK
-
 function construct_stochastic_orbitals(N, kpt, orbitalType)
     NG = length(kpt.G_vectors)
     radius = rand(NG, N)
     phase = cis.(2π .* rand(NG, N))
     ϕk = zeros(orbitalType, NG, N)
     ϕk .= radius .* phase
-    for a = 1:N
+    for a in 1:N
         ϕk[:, a] ./= norm(ϕk[:, a])
     end
     qr_decomp = qr(ϕk)
@@ -23,14 +17,16 @@ end
     DensitySpecificVirtuals(; n_orbitals)
 
 Target for [`generate_orbitals`](@ref): compressed virtual orbitals (Density Specific
-Virtuals) from the lowest eigenpairs of the generalized eigenvalue problem in the virtual space
+Virtuals) from the lowest eigenpairs of the generalized eigenvalue problem in the virtual
+space
 ```math
 \mathcal K \varphi  =  \lambda h \varphi
 ```
-where $\mathcal K$ and $h$ are the Fock exchange operator and the Fock Hamiltonian, respectively.
+where $\mathcal K$ and $h$ are the Fock exchange operator and the Fock Hamiltonian,
+respectively.
 
-The generated orbitals are NOT orthonormal (they are $h$-orthonormal), and their `eigenvalues`
-are the generalized Rayleigh quotients $\lambda_i$, not orbital energies. Use
+The generated orbitals are NOT orthonormal (they are $h$-orthonormal), and their
+`eigenvalues` are the generalized Rayleigh quotients $\lambda_i$, not orbital energies. Use
 [`canonicalize_orbitals`](@ref) to obtain orthonormal orbitals with Fock energies.
 """
 Base.@kwdef struct DensitySpecificVirtuals
@@ -41,7 +37,7 @@ end
     CanonicalVirtuals(; n_orbitals=:all)
 
 Target for [`generate_orbitals`](@ref): canonical virtual orbitals, i.e. the lowest
-eigenpairs of the Fock Hamiltonian in the virtual space. `n_orbitals = :all` yields the
+eigenpairs of the Fock Hamiltonian in the virtual space. `n_orbitals=:all` yields the
 complete virtual plane-wave space.
 """
 Base.@kwdef struct CanonicalVirtuals
@@ -91,7 +87,7 @@ function _eigenproblems(::CanonicalVirtuals, occ_space, ham)
     (; ψ, eigenvalues) = occ_space
     return map(eachindex(ham.basis.kpoints)) do ik
         A, ε_offset = _levelshifted_fock(ham[ik], ψ[ik], eigenvalues[ik])
-        (; A, B = I, ε_offset)
+        (; A, B=I, ε_offset)
     end
 end
 
@@ -101,7 +97,7 @@ function _eigenproblems(::DensitySpecificVirtuals, occ_space, ham)
     return map(eachindex(ham.basis.kpoints)) do ik
         B, ε_offset = _levelshifted_fock(ham[ik], ψ[ik], eigenvalues[ik])
         # eigenvalues are Rayleigh quotients λ = <φ|K|φ>/<φ|h|φ>, reported as they are
-        (; A = K[ik], B, ε_offset = zero(ε_offset))
+        (; A=K[ik], B, ε_offset=zero(ε_offset))
     end
 end
 
@@ -109,7 +105,7 @@ function _eigenproblems(::MaximalExchangeVirtuals, occ_space, ham)
     (; ψ, eigenvalues, occupation) = occ_space
     K = _projected_exchange(ham.basis, ψ, occupation, eigenvalues)
     return map(eachindex(ham.basis.kpoints)) do ik
-        (; A = K[ik], B = I, ε_offset = zero(eltype(eigenvalues[ik])))
+        (; A=K[ik], B=I, ε_offset=zero(eltype(eigenvalues[ik])))
     end
 end
 
@@ -124,8 +120,9 @@ _is_orthonormal(::DensitySpecificVirtuals) = false
 _is_orthonormal(::MaximalExchangeVirtuals) = true
 
 _default_solver(::VirtualOrbitalTarget) = LOBPCG()
-_default_solver(target::CanonicalVirtuals) =
-    target.n_orbitals === :all ? FullDiagonalization() : LOBPCG()
+function _default_solver(target::CanonicalVirtuals)
+    return target.n_orbitals === :all ? FullDiagonalization() : LOBPCG()
+end
 
 # --- Generator ---
 
@@ -141,7 +138,8 @@ eigenvalue problem defined by `target` with the eigensolver `solver`.
 - `occ_space`: the occupied orbitals (define the exchange operator and are projected out)
 - `ham`: the DFTK Hamiltonian of the converged Hartree-Fock calculation (`scfres.ham`)
 - `solver`: [`LOBPCG`](@ref), [`FullDiagonalization`](@ref) or [`BlockDavidson`](@ref).
-  Defaults to `LOBPCG()`, or `FullDiagonalization()` for `CanonicalVirtuals(n_orbitals=:all)`
+  Defaults to `LOBPCG()`, or `FullDiagonalization()` for
+  `CanonicalVirtuals(n_orbitals=:all)`
 
 # Returns
 An `OrbitalSpace` with `target.n_orbitals` orbitals per k-point.
@@ -150,7 +148,7 @@ function generate_orbitals(
     target::VirtualOrbitalTarget,
     occ_space::OrbitalSpace{TB,T,R},
     ham;
-    solver = _default_solver(target),
+    solver=_default_solver(target),
 ) where {TB,T,R}
     basis = ham.basis
     problems = _eigenproblems(target, occ_space, ham)

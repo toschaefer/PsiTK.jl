@@ -1,5 +1,3 @@
-export LOBPCG, FullDiagonalization, BlockDavidson
-
 """
     LOBPCG(; tol=1e-6, maxiter=200, callback=DefaultLobpcgCallback())
 
@@ -36,7 +34,7 @@ include("davidson.jl")
 
 function _solve(A, B, X0, preconditioner, solver::LOBPCG)
     res = lobpcg(A, X0, B, preconditioner, solver.tol, solver.maxiter; solver.callback)
-    return (; λ = res.λ, X = res.X)
+    return (; λ=res.λ, X=res.X)
 end
 
 function _solve(A, B, X0, preconditioner, ::FullDiagonalization)
@@ -48,7 +46,7 @@ function _solve(A, B, X0, preconditioner, ::FullDiagonalization)
     else
         res = eigen(A_dense, Hermitian(Matrix(B * Matrix{T}(I, N, N))))
     end
-    return (; λ = res.values[1:n], X = res.vectors[:, 1:n])
+    return (; λ=res.values[1:n], X=res.vectors[:, 1:n])
 end
 
 function _solve(A, B, X0, preconditioner, solver::BlockDavidson)

@@ -27,8 +27,8 @@
     @test norm(H_v - Diagonal(H_v)) < 1e-6
     @test diag(H_v) ≈ virt_canon_fd_all.eigenvalues[1]
 
-    target = CanonicalVirtuals(n_orbitals = N_virt_target)
-    virt_canon_fd = generate_orbitals(target, occ_space, ham; solver = FullDiagonalization())
+    target = CanonicalVirtuals(n_orbitals=N_virt_target)
+    virt_canon_fd = generate_orbitals(target, occ_space, ham; solver=FullDiagonalization())
 
     @test size(virt_canon_fd.ψ[1]) == (Nfull, N_virt_target)
     @test virt_canon_fd.ψ[1]' * virt_canon_fd.ψ[1] ≈ I
@@ -39,8 +39,8 @@
     # ---------------------------------------------------------
     # 2. CanonicalVirtuals, LOBPCG (default for a fixed number of orbitals)
     # ---------------------------------------------------------
-    solver_lobpcg = LOBPCG(tol = 1e-7, maxiter = 500, callback = identity)
-    virt_canon_lobpcg = generate_orbitals(target, occ_space, ham; solver = solver_lobpcg)
+    solver_lobpcg = LOBPCG(tol=1e-7, maxiter=500, callback=identity)
+    virt_canon_lobpcg = generate_orbitals(target, occ_space, ham; solver=solver_lobpcg)
 
     @test size(virt_canon_lobpcg.ψ[1]) == (Nfull, N_virt_target)
     @test virt_canon_lobpcg.ψ[1]' * virt_canon_lobpcg.ψ[1] ≈ I
@@ -48,19 +48,20 @@
     @test isapprox(norm(virt_canon_lobpcg.ψ[1]), 3.464101615137754, rtol=1e-6)
     @test isapprox(sum(virt_canon_lobpcg.eigenvalues[1]), 8.21541940500492, rtol=1e-6)
     # LOBPCG and FullDiagonalization solve the same eigenproblem
-    @test isapprox(virt_canon_lobpcg.eigenvalues[1], virt_canon_fd.eigenvalues[1], rtol=1e-4)
+    λ_fd = virt_canon_fd.eigenvalues[1]
+    @test isapprox(virt_canon_lobpcg.eigenvalues[1], λ_fd, rtol=1e-4)
 
     # ---------------------------------------------------------
     # 3. DensitySpecificVirtuals with both solvers
     # ---------------------------------------------------------
-    target = DensitySpecificVirtuals(n_orbitals = N_virt_target)
-    virt_dsv = generate_orbitals(target, occ_space, ham; solver = solver_lobpcg)
+    target = DensitySpecificVirtuals(n_orbitals=N_virt_target)
+    virt_dsv = generate_orbitals(target, occ_space, ham; solver=solver_lobpcg)
 
     @test size(virt_dsv.ψ[1]) == (Nfull, N_virt_target)
     @test virt_dsv.is_orthonormal == false
     @test norm(occ_space.ψ[1]' * virt_dsv.ψ[1]) < 1e-6
 
-    virt_dsv_fd = generate_orbitals(target, occ_space, ham; solver = FullDiagonalization())
+    virt_dsv_fd = generate_orbitals(target, occ_space, ham; solver=FullDiagonalization())
     @test size(virt_dsv_fd.ψ[1]) == (Nfull, N_virt_target)
     @test norm(occ_space.ψ[1]' * virt_dsv_fd.ψ[1]) < 1e-6
     @test isapprox(virt_dsv_fd.eigenvalues[1], virt_dsv.eigenvalues[1], rtol=1e-3)
@@ -73,13 +74,13 @@
     # ---------------------------------------------------------
     # 4. MaximalExchangeVirtuals: most negative exchange eigenvalues
     # ---------------------------------------------------------
-    target = MaximalExchangeVirtuals(n_orbitals = N_virt_target)
-    virt_mev = generate_orbitals(target, occ_space, ham; solver = FullDiagonalization())
+    target = MaximalExchangeVirtuals(n_orbitals=N_virt_target)
+    virt_mev = generate_orbitals(target, occ_space, ham; solver=FullDiagonalization())
     @test size(virt_mev.ψ[1]) == (Nfull, N_virt_target)
     @test virt_mev.ψ[1]' * virt_mev.ψ[1] ≈ I
     @test norm(occ_space.ψ[1]' * virt_mev.ψ[1]) < 1e-6
     @test all(virt_mev.eigenvalues[1] .< 0)
     @test issorted(virt_mev.eigenvalues[1])
-    virt_mev_lobpcg = generate_orbitals(target, occ_space, ham; solver = solver_lobpcg)
+    virt_mev_lobpcg = generate_orbitals(target, occ_space, ham; solver=solver_lobpcg)
     @test isapprox(virt_mev_lobpcg.eigenvalues[1], virt_mev.eigenvalues[1], rtol=1e-3)
 end

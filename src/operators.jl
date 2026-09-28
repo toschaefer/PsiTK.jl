@@ -1,5 +1,3 @@
-using LinearAlgebra
-
 """
     LevelShiftedOperator(base_op, V, ε_ref, safe_shift, penalty)
 
@@ -7,9 +5,10 @@ A wrapper that applies a constant energy shift and a strong penalty to a project
 When applied to a vector `X`, it computes:
     (base_op - ε_ref + safe_shift) * X + penalty * V * (V' * X)
 
-This effectively shifts the entire spectrum by `safe_shift - ε_ref`, while artificially 
-pushing the eigenvalues of the subspace defined by `V` up by `penalty`. 
-Useful for isolating virtual manifolds or forcing iterative eigensolvers away from an occupied subspace.
+This effectively shifts the entire spectrum by `safe_shift - ε_ref`, while artificially
+pushing the eigenvalues of the subspace defined by `V` up by `penalty`.
+Useful for isolating virtual manifolds or forcing iterative eigensolvers away from an
+occupied subspace.
 """
 struct LevelShiftedOperator{TH,TV}
     base_op::TH                      # the base operator
@@ -49,17 +48,16 @@ Base.size(op::LevelShiftedOperator, args...) = size(op.base_op, args...)
 Base.eltype(op::LevelShiftedOperator) = eltype(op.base_op)
 LinearAlgebra.ishermitian(op::LevelShiftedOperator) = ishermitian(op.base_op)
 
-
 """
     ProjectedShiftedOperator(base_op, V, shift)
 
-A wrapper that projects the operator into the orthogonal complement of the subspace `V`, 
+A wrapper that projects the operator into the orthogonal complement of the subspace `V`,
 while applying a constant energy `shift` directly to the `V` subspace components.
 
 Mathematically, it acts as:
     (1 - V * V') * base_op * (1 - V * V') * X + shift * V * (V' * X)
 
-This ensures that the eigensolver remains within the orthogonal complement of `V`, 
+This ensures that the eigensolver remains within the orthogonal complement of `V`,
 by penalizing any components inside `V` with the positive energy `shift`.
 """
 struct ProjectedShiftedOperator{TOp,TV}

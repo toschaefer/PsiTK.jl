@@ -20,7 +20,8 @@ for arg in args
     end
 end
 
-# If we are specifically including tags, don't arbitrarily exclude :slow unless it's explicitly in `excluded`
+# If we are specifically including tags, don't arbitrarily exclude :slow unless it's
+# explicitly in `excluded`
 if length(included) > 0 && !(:slow in excluded)
     empty!(excluded)
 end

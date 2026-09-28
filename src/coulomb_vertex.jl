@@ -36,8 +36,8 @@ function compute_overlap_densities(
     basis,
     ψ_bra,
     ψ_ket;
-    Ecut_ratio = 1.0,
-    callback = identity,
+    Ecut_ratio=1.0,
+    callback=identity,
 )
     all(kpt -> iszero(kpt.coordinate), basis.kpoints) ||
         error("Overlap densities are only implemented for Gamma-point calculations.")
@@ -73,7 +73,9 @@ function _G_indices_within_cutoff(basis, Ecut_ratio)
     end
     recip_lattice = basis.model.recip_lattice
     # vec: linear indices into the cube (findall on the 3D array would give CartesianIndex)
-    return findall(G -> sum(abs2, recip_lattice * G) / 2 <= Ecut_reduced, vec(G_vectors(basis)))
+    return findall(vec(G_vectors(basis))) do G
+        sum(abs2, recip_lattice * G) / 2 <= Ecut_reduced
+    end
 end
 
 @doc raw"""
@@ -111,7 +113,8 @@ for all orbitals in `ψ_bra` and `ψ_ket`. To restrict the orbitals, pass a subs
   their `basis` and `ψ`
 - `interaction_kernel`: the DFTK `InteractionKernel` (default: bare Coulomb with the
   probe-charge singularity treatment, `ProbeCharge(BareCoulomb())`)
-- `Ecut_ratio`: cutoff ratio for the vertex (default: 2/3), see [`compute_overlap_densities`](@ref)
+- `Ecut_ratio`: cutoff ratio for the vertex (default: 2/3), see
+  [`compute_overlap_densities`](@ref)
 - `callback`: called after each orbital pair with `(; step, total_steps)`,
   e.g. `callback=ShowProgress()` for a progress bar (default: no output)
 
@@ -123,9 +126,9 @@ function compute_coulomb_vertex(
     basis,
     ψ_bra,
     ψ_ket;
-    interaction_kernel = DFTK.ProbeCharge(DFTK.BareCoulomb()),
-    Ecut_ratio = 2/3,
-    callback = identity,
+    interaction_kernel=DFTK.ProbeCharge(DFTK.BareCoulomb()),
+    Ecut_ratio=2/3,
+    callback=identity,
 )
     ρmnG, G_vectors = compute_overlap_densities(basis, ψ_bra, ψ_ket; Ecut_ratio, callback)
 
@@ -144,20 +147,25 @@ end
 function compute_coulomb_vertex(basis, ψ; kwargs...)
     return compute_coulomb_vertex(basis, ψ, ψ; kwargs...)
 end
-function compute_coulomb_vertex(bra_space::OrbitalSpace, ket_space::OrbitalSpace; kwargs...)
+function compute_coulomb_vertex(
+    bra_space::OrbitalSpace,
+    ket_space::OrbitalSpace;
+    kwargs...,
+)
     return compute_coulomb_vertex(bra_space.basis, bra_space.ψ, ket_space.ψ; kwargs...)
 end
 function compute_coulomb_vertex(space::OrbitalSpace; kwargs...)
     return compute_coulomb_vertex(space.basis, space.ψ; kwargs...)
 end
 
-# This function initially based on code of the experimental "cc4s" branch in DFTK written by Michael Herbst
+# This function initially based on code of the experimental "cc4s" branch in DFTK
+# written by Michael Herbst
 function _compute_overlap_densities(
     basis,
     ψ_bra::AbstractVector{<:AbstractArray{T}},
     ψ_ket::AbstractVector{<:AbstractArray{T}};
-    G_indices = eachindex(G_vectors(basis)),
-    callback = identity,
+    G_indices=eachindex(G_vectors(basis)),
+    callback=identity,
 ) where {T}
     n_kpt = length(basis.kpoints)
     n_bands_bra = size(ψ_bra[1], 2)
@@ -173,7 +181,8 @@ function _compute_overlap_densities(
 
     is_symmetric = (ψ_bra === ψ_ket)
     if is_symmetric
-        total_steps = (n_bands_bra*(n_bands_bra+1)÷2)*n_kpt^2 # only upper triangle of ρmnG
+        # only upper triangle of ρmnG
+        total_steps = (n_bands_bra * (n_bands_bra + 1) ÷ 2) * n_kpt^2
     else
         total_steps = n_bands_bra * n_bands_ket * n_kpt^2
     end
@@ -186,12 +195,12 @@ function _compute_overlap_densities(
     # end
 
     # === Calculate overlap densities ρmnG ===
-    @views for (ikn, kptn) in enumerate(basis.kpoints), n = 1:n_bands_ket
+    @views for (ikn, kptn) in enumerate(basis.kpoints), n in 1:n_bands_ket
         # Prepare ψnk(r)
         ψnk_real = ifft(basis, kptn, ψ_ket[ikn][:, n])
 
         for (ikm, kptm) in enumerate(basis.kpoints)
-            for m = 1:n_bands_bra
+            for m in 1:n_bands_bra
                 # Compute upper triangle only (m <= n) if spaces are symmetric
                 # The lower triangle is filled via Hermitian conjugation below.
                 if is_symmetric && m > n
@@ -199,10 +208,10 @@ function _compute_overlap_densities(
                 end
 
                 # Prepare ψmk(r)
-                # TODO: pre-calculate some of them (not all because virtual space can be large)
+                # TODO: pre-calculate some of them (not all, the virtual space can be large)
                 ψmk_real = ifft(basis, kptm, ψ_bra[ikm][:, m])
 
-                # Calculate overlap density ρ_mn(r) = ψm*(r)ψn(r) and FFT it on the full cube
+                # Overlap density ρ_mn(r) = ψm*(r)ψn(r), FFT'd on the full cube
                 overlap_density = fft(basis, conj.(ψmk_real) .* ψnk_real)
 
                 # store entry of the overlap densities
@@ -218,12 +227,8 @@ function _compute_overlap_densities(
             end
         end
     end
-    ρmnG
+    return ρmnG
 end
-
-
-
-
 
 @doc raw"""
     DensityFitting
@@ -279,7 +284,8 @@ and the accumulated `singular_vectors` of shape `(NG, NF)`.
 """
 function compress_coulomb_vertex(fitting::DensityFitting, strategy)
     ΓmnF, U = _compress_coulomb_vertex(fitting.Γ, strategy)
-    singular_vectors = isnothing(fitting.singular_vectors) ? U : fitting.singular_vectors * U
+    U_prev = fitting.singular_vectors
+    singular_vectors = isnothing(U_prev) ? U : U_prev * U
     return DensityFitting(ΓmnF, fitting.G_vectors, fitting.kernel_fourier, singular_vectors)
 end
 
@@ -316,7 +322,6 @@ function _compress_coulomb_vertex(
     end
 end
 
-
 @doc raw"""
     AdaptiveRandomizedSVD(; thresh=1e-6, n_test_vectors=10)
 
@@ -331,14 +336,15 @@ where $\Gamma$ is a $N_{pp} \times N_G$ and $Q$ a $N_G \times N_F$ matrix.
 This is done through a stochastic Q and a diagonalization of
 ```math
 H = -\tilde \Gamma^\dagger \tilde \Gamma = U \Lambda U^\dagger
-```    
-where $\tilde \Gamma = \Gamma Q$. 
+```
+where $\tilde \Gamma = \Gamma Q$.
 The compressed $\Gamma$ is then obtained via $\Gamma_\text{compressed} = \tilde \Gamma U$,
 the effective transformation matrix being $Q U$.
 
 The dimension $N_F$ is found by a preceding adaptive range finder.
-This finder iteratively increases the columns of Q (i.e. $N_F$) in steps of $2\sqrt{N_{pp}}$
-and stops when the error for each of `n_test_vectors` stochastic test vectors $\omega_i$
+This finder iteratively increases the columns of Q (i.e. $N_F$) in steps of
+$2\sqrt{N_{pp}}$ and stops when the error for each of `n_test_vectors` stochastic test
+vectors $\omega_i$
 ```math
 \varepsilon_i =  \Vert (1 - QQ^\dagger)\Gamma^\dagger \omega_i \Vert
 ```
@@ -348,7 +354,8 @@ true projection error with probability $1 - 10^{-r}$
 would stop the finder too early in a small fraction of runs.
 
 TODO: The entire algorithm could be improved by techniques proposed in the following paper:
-Fast and accurate randomized algorithms for low-rank tensor decompositions, L. Ma, E. Solomonik (https://proceedings.neurips.cc/paper_files/paper/2021/hash/cbef46321026d8404bc3216d4774c8a9-Abstract.html)
+Fast and accurate randomized algorithms for low-rank tensor decompositions, L. Ma,
+E. Solomonik (https://proceedings.neurips.cc/paper_files/paper/2021/hash/cbef46321026d8404bc3216d4774c8a9-Abstract.html)
 """
 Base.@kwdef struct AdaptiveRandomizedSVD
     thresh::Float64 = 1e-6
@@ -368,15 +375,15 @@ function _compress_coulomb_vertex(
     Q_blocks = Matrix{T}[]
 
     # Step size for increasing the basis = 2*(√Npp)
-    column_block_size = round(Int, 2*Npp^0.5)
+    column_block_size = round(Int, 2 * Npp^0.5)
 
     # Stochastic test vectors for error estimation
     Ω_test = randn(T, Npp, strategy.n_test_vectors)
 
     # target error a little smaller than √thresh
-    target_error = sqrt(thresh)/2
+    target_error = sqrt(thresh) / 2
 
-    # set current error initially larger than stop criterion 
+    # set current error initially larger than stop criterion
     current_error = 2 * target_error
 
     # Residuals of the projected test vectors, deflated block by block below
@@ -390,7 +397,7 @@ function _compress_coulomb_vertex(
         Ω = randn(T, Npp, current_block_size) # Draw a new random block
         Y_block = Γmat' * Ω                   # Project Γ onto Ω
 
-        # Orthogonalize Y_block against existing Q: we do iterated Gram-Schmidt 
+        # Orthogonalize Y_block against existing Q: we do iterated Gram-Schmidt
         # to preserve orthogonality (assuming "twice is enough" rule)
         if !isempty(Q_blocks)
             # first pass

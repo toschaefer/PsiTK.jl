@@ -1,14 +1,5 @@
-export merge_spaces
-export canonicalize_orbitals
-export split_occupied_virtual
-export select_orbitals
-
-using LinearAlgebra
-
-export OrbitalSpace
-
 """
-    OrbitalSpace{B, T, R <: Real}
+    OrbitalSpace{B,T,R<:Real}
 
 A generic representation of an orbital manifold. Decouples the basis and orbitals
 from stateful host objects like DFTK's `scfres`.
@@ -41,7 +32,7 @@ function OrbitalSpace(scfres)
         scfres.eigenvalues,
         scfres.occupation,
         scfres.εF,
-        true # Converged SCF states are always orthonormal
+        true, # Converged SCF states are always orthonormal
     )
 end
 
@@ -56,14 +47,13 @@ function merge_spaces(
 ) where {B,T,R}
     spaces = (space, more_spaces...)
     basis = space.basis
-    nkpt = length(basis.kpoints)
     is_orthonormal_merged = all(s.is_orthonormal for s in spaces)
 
     ψ_merged = Matrix{T}[]
     eigenvalues_merged = Vector{R}[]
     occupation_merged = Vector{R}[]
 
-    for ik = 1:nkpt
+    for ik in eachindex(basis.kpoints)
         # Standard horizontal concatenation of wavefunctions
         ψ_k_blocks = [s.ψ[ik] for s in spaces]
         push!(ψ_merged, reduce(hcat, ψ_k_blocks))
@@ -79,7 +69,7 @@ function merge_spaces(
         eigenvalues_merged,
         occupation_merged,
         spaces[1].εF,
-        is_orthonormal_merged
+        is_orthonormal_merged,
     )
 end
 
@@ -93,7 +83,7 @@ function canonicalize_orbitals(space::OrbitalSpace{B,T,R}, hamiltonian) where {B
     ψ_canon = Matrix{T}[]
     eigenvalues_canon = Vector{R}[]
 
-    for ik = 1:length(space.basis.kpoints)
+    for ik in eachindex(space.basis.kpoints)
         X = space.ψ[ik]
         # H is the Hamiltonian applied to the subspace
         HX = hamiltonian[ik] * X
@@ -107,7 +97,7 @@ function canonicalize_orbitals(space::OrbitalSpace{B,T,R}, hamiltonian) where {B
             res = eigen(h_sub, S_sub)
         end
 
-        # Rotate original wavefunctions to diagonalize 
+        # Rotate original wavefunctions to diagonalize
         push!(ψ_canon, X * res.vectors)
         push!(eigenvalues_canon, res.values)
     end
@@ -118,11 +108,9 @@ function canonicalize_orbitals(space::OrbitalSpace{B,T,R}, hamiltonian) where {B
         eigenvalues_canon,
         space.occupation,
         space.εF,
-        true 
+        true,
     )
 end
-
-
 
 """
     split_occupied_virtual(space::OrbitalSpace; threshold=1e-6)
@@ -130,7 +118,7 @@ end
 Split `space` into its occupied and virtual orbitals, i.e. those with fractional
 occupation above resp. below `threshold`. Returns a tuple `(occupied_space, virtual_space)`.
 """
-function split_occupied_virtual(space::OrbitalSpace; threshold = 1e-6)
+function split_occupied_virtual(space::OrbitalSpace; threshold=1e-6)
     masks = DFTK.occupied_empty_masks(space.occupation, threshold)
     return select_orbitals(space, masks.mask_occ), select_orbitals(space, masks.mask_empty)
 end
@@ -140,15 +128,19 @@ end
 
 Extracts the orbitals from the given `space` at the specific indices.
 `indices` can either be a single `AbstractVector{Int}` (applied to all k-points),
-or an `AbstractVector{<:AbstractVector{Int}}` providing a specific list of indices for each k-point.
+or an `AbstractVector{<:AbstractVector{Int}}` providing a specific list of indices for
+each k-point.
 """
-function select_orbitals(space::OrbitalSpace{B,T,R}, indices::AbstractVector{<:AbstractVector{Int}}) where {B,T,R}
+function select_orbitals(
+    space::OrbitalSpace{B,T,R},
+    indices::AbstractVector{<:AbstractVector{Int}},
+) where {B,T,R}
     @assert length(indices) == length(space.ψ)
     ψ_sel = Matrix{T}[]
     eigenvalues_sel = Vector{R}[]
     occupation_sel = Vector{R}[]
 
-    for ik = 1:length(space.ψ)
+    for ik in eachindex(space.ψ)
         push!(ψ_sel, space.ψ[ik][:, indices[ik]])
         push!(eigenvalues_sel, space.eigenvalues[ik][indices[ik]])
         push!(occupation_sel, space.occupation[ik][indices[ik]])
@@ -160,11 +152,11 @@ function select_orbitals(space::OrbitalSpace{B,T,R}, indices::AbstractVector{<:A
         eigenvalues_sel,
         occupation_sel,
         space.εF,
-        space.is_orthonormal
+        space.is_orthonormal,
     )
 end
 
 function select_orbitals(space::OrbitalSpace, indices::AbstractVector{Int})
     # Apply the same indices to all k-points
-    return select_orbitals(space, [indices for _ in 1:length(space.ψ)])
+    return select_orbitals(space, [indices for _ in eachindex(space.ψ)])
 end

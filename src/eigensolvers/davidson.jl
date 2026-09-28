@@ -5,7 +5,8 @@ Configuration struct for the Block Davidson iterative eigensolver.
 
 # Fields
 - `tol::Float64`: The residual tolerance for convergence.
-- `use_jabobi_davidson::Bool`: If true, applies a Jacobi-Davidson style correction equation... 
+- `use_jabobi_davidson::Bool`: If true, applies a Jacobi-Davidson style correction
+  equation...
 - `maxiter::Int`: Maximum number of iterations before the solver aborts.
 """
 Base.@kwdef struct BlockDavidson
@@ -17,7 +18,7 @@ end
 """
     davidson(A, X0, solver::BlockDavidson; kwargs...)
 
-Iteratively computes the lowest eigenvalues and eigenvectors of the linear operator `A` 
+Iteratively computes the lowest eigenvalues and eigenvectors of the linear operator `A`
 using a Block Davidson method.
 
 TODO: some more details would be nice
@@ -33,7 +34,7 @@ Francesco Mereto, Master's Thesis, 2026 (link?)
 function davidson(A, X0, solver::BlockDavidson; kwargs...)
     # TODO: Mereto
     error("Block Davidson solver not implemented yet.")
-    
+
     # Expected to return a named tuple or struct, for example:
     # return (λ = eigenvalues, X = eigenvectors, residual = residuals)
 end

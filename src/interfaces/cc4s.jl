@@ -1,7 +1,5 @@
-# This file initially based on code of the experimental "cc4s" branch in DFTK written by Michael Herbst
-
-using YAML
-using DFTK
+# This file initially based on code of the experimental "cc4s" branch in DFTK
+# written by Michael Herbst
 
 """
     write_cc4s_tensor(folder, name, tensor_data; kwargs...)
@@ -14,11 +12,11 @@ function write_cc4s_tensor(
     name::AbstractString,
     tensor_data;
     dimensions::Vector{<:Dict},
-    scalarType::String = "Real64",
-    elementType::String = "IeeeBinaryFile",
-    metaData::Dict = Dict{String,Any}(),
-    unit::Float64 = 1.0,
-    force = false
+    scalarType::String="Real64",
+    elementType::String="IeeeBinaryFile",
+    metaData::Dict=Dict{String,Any}(),
+    unit::Float64=1.0,
+    force=false,
 )
     yamlfile = joinpath(folder, "$name.yaml")
     elementsfile = joinpath(folder, "$name.elements")
@@ -59,7 +57,7 @@ function write_eigenenergies(
     folder::AbstractString,
     eigenvalues::AbstractVector,
     εF::Number;
-    force = false,
+    force=false,
 )
     @assert length(eigenvalues) == 1
     εk = eigenvalues[1]
@@ -71,12 +69,14 @@ function write_eigenenergies(
     metaData = Dict("fermiEnergy" => εF, "energies" => εk)
 
     return write_cc4s_tensor(
-        folder, "EigenEnergies", εk;
-        dimensions = dimensions,
-        scalarType = "Real64",
-        elementType = "TextFile",
-        metaData = metaData,
-        force = force
+        folder,
+        "EigenEnergies",
+        εk;
+        dimensions,
+        scalarType="Real64",
+        elementType="TextFile",
+        metaData,
+        force,
     )
 end
 
@@ -112,8 +112,8 @@ The list of written file paths.
 function dump_cc4s_files(
     active_space::OrbitalSpace,
     fitting::DensityFitting;
-    folder::AbstractString = joinpath(pwd(), "cc4s"),
-    force = false,
+    folder::AbstractString=joinpath(pwd(), "cc4s"),
+    force=false,
 )
     # Cc4s expects canonical HF orbitals: orthonormal, with Fock eigenvalues
     if !active_space.is_orthonormal
@@ -135,7 +135,8 @@ function dump_cc4s_files(
     # Cc4s only supports gapped systems with integer occupancies
     for occ in active_space.occupation[1]
         if !(occ ≈ 0.0 || occ ≈ 1.0 || occ ≈ 2.0)
-            error("Cc4s interface requires integer occupancies. Fractional occupations detected.")
+            error("Cc4s interface requires integer occupancies. " *
+                  "Fractional occupations detected.")
         end
     end
 
@@ -154,44 +155,54 @@ function dump_cc4s_files(
     # --- dump DeltaIntegralsHH
     DeltaIntegralsHH = compute_delta_integrals(basis, hole_space.ψ, Val(:HH))
     N_occ = size(DeltaIntegralsHH, 1)
-    
+
     # Row-major ordering for C++: i, j
-    tensor_data_hh = (convert(Complex{Cdouble}, DeltaIntegralsHH[i, j]) for i=1:N_occ for j=1:N_occ)
+    tensor_data_hh = (
+        convert(Complex{Cdouble}, DeltaIntegralsHH[i, j])
+        for i in 1:N_occ for j in 1:N_occ
+    )
     dim_hh = [
         Dict("length" => N_occ, "type" => "Hole"),
-        Dict("length" => N_occ, "type" => "Hole")
+        Dict("length" => N_occ, "type" => "Hole"),
     ]
     files_hh = write_cc4s_tensor(
-        folder, "DeltaIntegralsHH", tensor_data_hh;
-        dimensions = dim_hh,
-        scalarType = "Complex64",
-        elementType = "IeeeBinaryFile",
-        force = force
+        folder,
+        "DeltaIntegralsHH",
+        tensor_data_hh;
+        dimensions=dim_hh,
+        scalarType="Complex64",
+        elementType="IeeeBinaryFile",
+        force,
     )
 
     # --- dump DeltaIntegralsPPHH
     DeltaIntegralsPPHH = compute_delta_integrals(
-        basis, particle_space.ψ, hole_space.ψ, Val(:PPHH)
+        basis,
+        particle_space.ψ,
+        hole_space.ψ,
+        Val(:PPHH),
     )
     N_virt = size(DeltaIntegralsPPHH, 1)
-    
+
     # Row-major ordering for C++: a, b, i, j
     tensor_data_pphh = (
-        convert(Complex{Cdouble}, DeltaIntegralsPPHH[a, b, i, j]) 
-        for a=1:N_virt for b=1:N_virt for i=1:N_occ for j=1:N_occ
+        convert(Complex{Cdouble}, DeltaIntegralsPPHH[a, b, i, j])
+        for a in 1:N_virt for b in 1:N_virt for i in 1:N_occ for j in 1:N_occ
     )
     dim_pphh = [
         Dict("length" => N_virt, "type" => "Particle"),
         Dict("length" => N_virt, "type" => "Particle"),
         Dict("length" => N_occ, "type" => "Hole"),
-        Dict("length" => N_occ, "type" => "Hole")
+        Dict("length" => N_occ, "type" => "Hole"),
     ]
     files_pphh = write_cc4s_tensor(
-        folder, "DeltaIntegralsPPHH", tensor_data_pphh;
-        dimensions = dim_pphh,
-        scalarType = "Complex64",
-        elementType = "IeeeBinaryFile",
-        force = force
+        folder,
+        "DeltaIntegralsPPHH",
+        tensor_data_pphh;
+        dimensions=dim_pphh,
+        scalarType="Complex64",
+        elementType="IeeeBinaryFile",
+        force,
     )
 
     # --- dump Grid Vectors
@@ -207,12 +218,11 @@ function dump_cc4s_files(
     return vcat(files_ene, files_coul, files_hh, files_pphh, files_grid, files_pot, files_u)
 end
 
-
 # Write CoulombVertex.yaml and CoulombVertex.elements
 function write_coulomb_vertex(
     folder::AbstractString,
     ΓnmF::AbstractArray{T,5};
-    force = true,
+    force=true,
 ) where {T}
     n_kpt = size(ΓnmF, 1)
     n_bands = size(ΓnmF, 2)
@@ -228,21 +238,23 @@ function write_coulomb_vertex(
     ]
     metaData = Dict("halfGrid" => 0)  # Complex integrals
 
-    # Cc4s is writte in C++
+    # Cc4s is written in C++
     # C++ is row-major, julia is column-major. Therefore we write
     # ΓnmF in a stream using chunks of all field Fs for given (n,m)
     tensor_data = (
-        convert(Vector{Complex{Cdouble}}, vec(ΓnmF[1, n, 1, m, :])) 
-        for n = 1:n_bands for m = 1:n_bands
+        convert(Vector{Complex{Cdouble}}, vec(ΓnmF[1, n, 1, m, :]))
+        for n in 1:n_bands for m in 1:n_bands
     )
 
     return write_cc4s_tensor(
-        folder, "CoulombVertex", tensor_data;
-        dimensions = dimensions,
-        scalarType = "Complex64",
-        elementType = "IeeeBinaryFile",
-        metaData = metaData,
-        force = force
+        folder,
+        "CoulombVertex",
+        tensor_data;
+        dimensions,
+        scalarType="Complex64",
+        elementType="IeeeBinaryFile",
+        metaData,
+        force,
     )
 end
 
@@ -251,7 +263,7 @@ function write_grid_vectors(
     folder::AbstractString,
     basis::PlaneWaveBasis,
     G_vectors::AbstractVector;
-    force = false,
+    force=false,
 )
     # The GridVectors object contains the grid vectors of the employed plane-wave basis set
     model = basis.model
@@ -263,26 +275,26 @@ function write_grid_vectors(
         Dict("length" => length(G_cartesian), "type" => "Momentum"),
     ]
     # Unit is 1.0 (Bohr^-1)
-    
-    # We still provide the Gi, Gj, Gk for reference, though not strictly needed for Cartesian
+
+    # Gi, Gj, Gk for reference only, they are not needed for Cartesian coordinates
     metaData = Dict(
         "Gi" => model.recip_lattice[:, 1],
         "Gj" => model.recip_lattice[:, 2],
         "Gk" => model.recip_lattice[:, 3],
     )
 
-    tensor_data = (
-        G[i] for G in G_cartesian for i = 1:3
-    )
+    tensor_data = (G[i] for G in G_cartesian for i in 1:3)
 
     return write_cc4s_tensor(
-        folder, "GridVectors", tensor_data;
-        dimensions = dimensions,
-        scalarType = "Real64",
-        elementType = "TextFile",
-        metaData = metaData,
-        unit = 1.0,
-        force = force
+        folder,
+        "GridVectors",
+        tensor_data;
+        dimensions,
+        scalarType="Real64",
+        elementType="TextFile",
+        metaData,
+        unit=1.0,
+        force,
     )
 end
 
@@ -290,19 +302,19 @@ end
 function write_coulomb_potential(
     folder::AbstractString,
     kernel_fourier::AbstractVector;
-    force = false,
+    force=false,
 )
-    dimensions = [
-        Dict("length" => length(kernel_fourier), "type" => "Momentum")
-    ]
+    dimensions = [Dict("length" => length(kernel_fourier), "type" => "Momentum")]
 
     return write_cc4s_tensor(
-        folder, "CoulombPotential", kernel_fourier;
-        dimensions = dimensions,
-        scalarType = "Real64",
-        elementType = "TextFile",
-        unit = 1.0,
-        force = force
+        folder,
+        "CoulombPotential",
+        kernel_fourier;
+        dimensions,
+        scalarType="Real64",
+        elementType="TextFile",
+        unit=1.0,
+        force,
     )
 end
 
@@ -310,26 +322,29 @@ end
 function write_singular_vectors(
     folder::AbstractString,
     coulomb_vertex_singular_vectors::AbstractMatrix{T};
-    force = false,
+    force=false,
 ) where {T}
     # coulomb_vertex_singular_vectors has dimensions (N_G, N_F)
     N_G, N_F = size(coulomb_vertex_singular_vectors)
     dimensions = [
         Dict("length" => N_F, "type" => "AuxiliaryField"),
-        Dict("length" => N_G, "type" => "Momentum")
+        Dict("length" => N_G, "type" => "Momentum"),
     ]
-    
+
     # row-major write: loop over F then G
     tensor_data = (
-        convert(Complex{Cdouble}, coulomb_vertex_singular_vectors[iG, iF]) for iF = 1:N_F for iG = 1:N_G
+        convert(Complex{Cdouble}, coulomb_vertex_singular_vectors[iG, iF])
+        for iF in 1:N_F for iG in 1:N_G
     )
 
     return write_cc4s_tensor(
-        folder, "CoulombVertexSingularVectors", tensor_data;
-        dimensions = dimensions,
-        scalarType = "Complex64",
-        elementType = "IeeeBinaryFile",
-        unit = 1.0,
-        force = force
+        folder,
+        "CoulombVertexSingularVectors",
+        tensor_data;
+        dimensions,
+        scalarType="Complex64",
+        elementType="IeeeBinaryFile",
+        unit=1.0,
+        force,
     )
 end
