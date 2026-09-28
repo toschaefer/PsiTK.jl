@@ -71,6 +71,48 @@
     @test virt_dsv_canon.is_orthonormal == true
     @test virt_dsv_canon.ψ[1]' * virt_dsv_canon.ψ[1] ≈ I
 
+    # Canonicalizing a merged space distributes the occupations by aufbau, independent of
+    # the merge order, and preserves the occupied subspace of the converged HF (no warning)
+    active = @test_nowarn canonicalize_orbitals(
+        merge_spaces(occ_space, virt_dsv),
+        ham,
+    )
+    active_rev = canonicalize_orbitals(merge_spaces(virt_dsv, occ_space), ham)
+    ψ_active = active.ψ[1]
+    f_active = active.occupation[1]
+    @test ψ_active' * ψ_active ≈ I
+    @test issorted(active.eigenvalues[1])
+    @test f_active == sort(vcat(occ_space.occupation[1], virt_dsv.occupation[1]); rev=true)
+    @test active_rev.occupation[1] == f_active
+    @test active_rev.eigenvalues[1] ≈ active.eigenvalues[1]
+    ψ_occ = ψ_active[:, f_active .> 0]
+    ψ_occ_hf = occ_space.ψ[1]
+    @test norm(ψ_occ - ψ_occ_hf * (ψ_occ_hf' * ψ_occ)) < 1e-4
+
+    # The Fermi level is moved into the gap of the canonical orbitals
+    ε_active = active.eigenvalues[1]
+    @test maximum(ε_active[f_active .> 0]) < active.εF < minimum(ε_active[f_active .== 0])
+
+    # Splitting does not rely on the occupied orbitals coming first
+    occ_split, virt_split = split_occupied_virtual(merge_spaces(virt_dsv, occ_space))
+    @test occ_split.ψ[1] == occ_space.ψ[1]
+    @test virt_split.ψ[1] == virt_dsv.ψ[1]
+
+    # Mixing HOMO and LUMO by a rotation gives a determinant the Fock operator does not
+    # preserve: the aufbau occupation differs from the input one, which is warned about
+    X_mixed = copy(ψ_active)
+    rotation = [cos(0.1) -sin(0.1); sin(0.1) cos(0.1)]
+    X_mixed[:, [Nocc, Nocc + 1]] = X_mixed[:, [Nocc, Nocc + 1]] * rotation
+    mixed = OrbitalSpace(
+        basis,
+        [X_mixed],
+        active.eigenvalues,
+        active.occupation,
+        active.εF,
+        true,
+    )
+    @test_logs (:warn, r"different occupation") canonicalize_orbitals(mixed, ham)
+
     # ---------------------------------------------------------
     # 4. MaximalExchangeVirtuals: most negative exchange eigenvalues
     # ---------------------------------------------------------
