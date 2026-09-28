@@ -69,57 +69,52 @@ const VirtualOrbitalTarget =
 #     of A φ = λ B φ are the wanted orbitals with eigenvalue λ + ε_offset ---
 
 # Fock operator with the occupied space pushed above the virtual spectrum
-function _levelshifted_fock(ham, occ_space, ik)
-    ε_homo = maximum(occ_space.eigenvalues[ik])
-    safe_shift = 1e-5            # keeps the shifted virtual spectrum strictly positive
-    penalty = 2 * ham.basis.Ecut # lifts the occupied space above all plane-wave energies
-    op = LevelShiftedOperator(ham[ik], occ_space.ψ[ik], ε_homo, safe_shift, penalty)
+function _levelshifted_fock(ham_k, ψocc_k, εocc_k)
+    ε_homo = maximum(εocc_k)
+    safe_shift = 1e-5              # keeps the shifted virtual spectrum strictly positive
+    penalty = 2 * ham_k.basis.Ecut # lifts the occupied space above all plane-wave energies
+    op = LevelShiftedOperator(ham_k, ψocc_k, ε_homo, safe_shift, penalty)
     return op, ε_homo - safe_shift
 end
 
-# Fock exchange operator of the occupied orbitals, one block per k-point
-function _exchange_operator(ham, occ_space)
-    basis = ham.basis
+# Fock exchange operator of the occupied orbitals restricted to the virtual space, one block
+# per k-point: occupied components are shifted to positive energies, so they are never
+# among the lowest (negative) exchange eigenvalues
+function _projected_exchange(basis, ψocc, occupation, εocc)
     term = only(t for t in basis.terms if t isa DFTK.TermExactExchange)
-    _, K = DFTK.ene_ops(term, basis, occ_space.ψ, occ_space.occupations)
-    return K
-end
-
-# Exchange operator restricted to the virtual space: occupied components are shifted to
-# positive energies, so they are never among the lowest (negative) exchange eigenvalues
-function _projected_exchange(K, occ_space, ik)
-    shift = abs(minimum(minimum.(occ_space.eigenvalues))) + 2.0
-    return ProjectedShiftedOperator(K[ik], occ_space.ψ[ik], shift)
+    _, K = DFTK.ene_ops(term, basis, ψocc, occupation)
+    shift = abs(minimum(minimum, εocc)) + 2.0
+    return [ProjectedShiftedOperator(K[ik], ψocc[ik], shift) for ik in eachindex(K)]
 end
 
 function _eigenproblems(::CanonicalVirtuals, occ_space, ham)
+    (; ψ, eigenvalues) = occ_space
     return map(eachindex(ham.basis.kpoints)) do ik
-        A, ε_offset = _levelshifted_fock(ham, occ_space, ik)
+        A, ε_offset = _levelshifted_fock(ham[ik], ψ[ik], eigenvalues[ik])
         (; A, B = I, ε_offset)
     end
 end
 
 function _eigenproblems(::DensitySpecificVirtuals, occ_space, ham)
-    K = _exchange_operator(ham, occ_space)
+    (; ψ, eigenvalues, occupation) = occ_space
+    K = _projected_exchange(ham.basis, ψ, occupation, eigenvalues)
     return map(eachindex(ham.basis.kpoints)) do ik
-        B, ε_offset = _levelshifted_fock(ham, occ_space, ik)
+        B, ε_offset = _levelshifted_fock(ham[ik], ψ[ik], eigenvalues[ik])
         # eigenvalues are Rayleigh quotients λ = <φ|K|φ>/<φ|h|φ>, reported as they are
-        (; A = _projected_exchange(K, occ_space, ik), B, ε_offset = zero(ε_offset))
+        (; A = K[ik], B, ε_offset = zero(ε_offset))
     end
 end
 
 function _eigenproblems(::MaximalExchangeVirtuals, occ_space, ham)
-    K = _exchange_operator(ham, occ_space)
+    (; ψ, eigenvalues, occupation) = occ_space
+    K = _projected_exchange(ham.basis, ψ, occupation, eigenvalues)
     return map(eachindex(ham.basis.kpoints)) do ik
-        A = _projected_exchange(K, occ_space, ik)
-        (; A, B = I, ε_offset = zero(eltype(occ_space.eigenvalues[ik])))
+        (; A = K[ik], B = I, ε_offset = zero(eltype(eigenvalues[ik])))
     end
 end
 
-function _n_orbitals(target::VirtualOrbitalTarget, occ_space, ik)
-    if target.n_orbitals === :all
-        return length(occ_space.basis.kpoints[ik].G_vectors) - size(occ_space.ψ[ik], 2)
-    end
+function _n_orbitals(target::VirtualOrbitalTarget, n_G, n_occ)
+    target.n_orbitals === :all && return n_G - n_occ
     return target.n_orbitals
 end
 
@@ -162,12 +157,12 @@ function generate_orbitals(
 
     ψ_virt = Matrix{T}[]
     eigenvalues_virt = Vector{R}[]
-    occupations_virt = Vector{R}[]
+    occupation_virt = Vector{R}[]
 
     for (ik, kpt) in enumerate(basis.kpoints)
-        n_orbitals = _n_orbitals(target, occ_space, ik)
         ψocck = occ_space.ψ[ik]
         Nfull = length(kpt.G_vectors)
+        n_orbitals = _n_orbitals(target, Nfull, size(ψocck, 2))
 
         if solver isa LOBPCG && n_orbitals > 0.1 * Nfull
             @warn "n_orbitals ($n_orbitals) is > 10% of plane waves ($Nfull). " *
@@ -185,14 +180,14 @@ function generate_orbitals(
 
         push!(ψ_virt, X)
         push!(eigenvalues_virt, λ .+ ε_offset)
-        push!(occupations_virt, zeros(R, n_orbitals))
+        push!(occupation_virt, zeros(R, n_orbitals))
     end
 
     return OrbitalSpace{TB,T,R}(
         basis,
         ψ_virt,
         eigenvalues_virt,
-        occupations_virt,
+        occupation_virt,
         occ_space.εF,
         _is_orthonormal(target),
     )

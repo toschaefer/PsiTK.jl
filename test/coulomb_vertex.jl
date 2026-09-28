@@ -2,11 +2,13 @@
     using LinearAlgebra
 
     scfres = TestSystems.setup_water_hf(n_bands_converge=8)
-    space = OrbitalSpace(scfres)
     nkpt = length(scfres.basis.kpoints)
     nbands = scfres.n_bands_converge
+    # DFTK may carry more than n_bands_converge bands in ψ
+    space = select_orbitals(OrbitalSpace(scfres), 1:nbands)
+    basis = space.basis
 
-    fitting = compute_coulomb_vertex(space; n_bands = nbands)
+    fitting = compute_coulomb_vertex(space)
     (; Γ, G_vectors, kernel_fourier) = fitting
     @test isnothing(fitting.singular_vectors)
 
@@ -18,7 +20,7 @@
     @test isapprox(norm(Γ), 2.319359783263448, rtol = 1e-6)
 
     # Bare overlap densities: Γ = √v ⊙ ρ on the same G vectors
-    ρmnG, G_vectors_ρ = compute_overlap_densities(space; n_bands = nbands, Ecut_ratio = 2/3)
+    ρmnG, G_vectors_ρ = compute_overlap_densities(space; Ecut_ratio = 2/3)
     @test G_vectors_ρ == G_vectors
     @test ρmnG .* reshape(sqrt.(kernel_fourier), 1, 1, 1, 1, :) ≈ Γ
 
@@ -34,24 +36,38 @@
 
     # Callback is called once per unique orbital pair (upper triangle for symmetric spaces)
     steps = Int[]
-    compute_overlap_densities(space; n_bands = nbands, callback = info -> push!(steps, info.step))
+    compute_overlap_densities(space; callback = info -> push!(steps, info.step))
     @test steps == 1:(nbands * (nbands + 1) ÷ 2)
 
     # Default Ecut_ratio = 1.0 reproduces the full plane-wave grid of the basis
-    ρ_full, G_full = compute_overlap_densities(space; n_bands = nbands)
+    ρ_full, G_full = compute_overlap_densities(space)
     @test length(G_full) == length(scfres.basis.kpoints[1].G_vectors)
     @test size(ρ_full, 5) > size(ρmnG, 5)
 
     # Ecut_ratio = 4 (DFTK's default supersampling of 2) holds the exact overlap densities;
     # beyond the FFT grid an error is raised instead of silently truncating
-    ρ_exact, G_exact = compute_overlap_densities(space; n_bands = nbands, Ecut_ratio = 4)
+    ρ_exact, G_exact = compute_overlap_densities(space; Ecut_ratio = 4)
     @test size(ρ_exact, 5) == length(G_exact) > size(ρ_full, 5)
     @test all(G -> -G in G_exact, G_exact)
-    @test_throws ErrorException compute_overlap_densities(space; n_bands = nbands, Ecut_ratio = 8)
+    @test_throws ErrorException compute_overlap_densities(space; Ecut_ratio = 8)
 
-    # The Cc4s dump refuses non-orthonormal (non-canonical) spaces
-    space_nonortho = OrbitalSpace(space.basis, space.ψ, space.eigenvalues, space.occupations, space.εF, false)
+    # The (basis, ψ) forms agree with the OrbitalSpace shorthands; the bra ≠ ket path
+    # (no symmetry shortcut) reproduces the symmetric result
+    @test compute_coulomb_vertex(basis, space.ψ).Γ ≈ Γ
+    ρ_bk, G_bk = compute_overlap_densities(basis, space.ψ, deepcopy(space.ψ); Ecut_ratio = 2/3)
+    @test G_bk == G_vectors && ρ_bk ≈ ρmnG
+    occ_space, _ = split_occupied_virtual(space)
+    nocc = size(occ_space.ψ[1], 2)
+    ρ_ov, _ = compute_overlap_densities(occ_space, space; Ecut_ratio = 2/3)
+    @test size(ρ_ov)[1:4] == (nkpt, nocc, nkpt, nbands)
+    @test ρ_ov ≈ ρmnG[:, 1:nocc, :, :, :]
+
+    # The Cc4s dump refuses non-orthonormal (non-canonical) spaces and vertices that do not
+    # belong to the active space
+    space_nonortho = OrbitalSpace(basis, space.ψ, space.eigenvalues, space.occupation, space.εF, false)
     @test_throws ErrorException dump_cc4s_files(space_nonortho, fitting; folder = mktempdir())
+    space_small = select_orbitals(space, 1:(nbands - 1))
+    @test_throws ErrorException dump_cc4s_files(space_small, fitting; folder = mktempdir())
 
     # CoulombGramian compression: Γ_F = Γ_G U with the returned singular vectors
     fitting_cg = compress_coulomb_vertex(fitting, CoulombGramian(thresh = 1e-3))

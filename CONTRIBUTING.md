@@ -18,12 +18,12 @@ itself remain the authoritative documentation.
 
 PsiTK builds on DFTK's plane-wave infrastructure (e.g. `PlaneWaveBasis`, FFTs, Hamiltonian,
 exchange operators) and borrows its pattern: *nouns* are plain structs that carry either data
-or configuration, rather than both; *verbs* are functions that take the data as arguments and
-the configuration as a dispatch argument. Some examples:
+or configuration, rather than both; *verbs* are functions that take the data they need as
+arguments and the configuration as a dispatch argument. Some examples:
 
 | noun | role | lives in |
 |---|---|---|
-| `OrbitalSpace` | data: orbitals, energies, occupations on a basis; what most verbs consume and produce | `src/orbital_spaces.jl` |
+| `OrbitalSpace` | data: orbitals, energies, occupation on a basis; what orbital-space verbs and interfaces consume and produce | `src/orbital_spaces.jl` |
 | `DensityFitting` | data: the Coulomb vertex `Γ` together with its auxiliary basis (G vectors, kernel, singular vectors) | `src/coulomb_vertex.jl` |
 | target, e.g. `DensitySpecificVirtuals` | physics: *which* eigenvalue problem defines the virtual orbitals | `src/virtual_orbitals.jl` |
 | solver, e.g. `LOBPCG` | numerics: *how* an eigenvalue problem is solved | `src/eigensolvers/` |

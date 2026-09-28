@@ -23,7 +23,7 @@ function main()
     println("run PBE")
     scfres_pbe = self_consistent_field(basis; is_converged = ScfConvergenceEnergy(1e-7))
 
-    model = model_HF(lattice, atoms, positions; exx_kernel = Coulomb(ProbeCharge()))
+    model = model_HF(lattice, atoms, positions; exx_kernel = ProbeCharge(BareCoulomb()))
     basis = PlaneWaveBasis(model; Ecut = Ecut, kgrid = [1, 1, 1])
     println("run HF")
     scfres_hf = self_consistent_field(

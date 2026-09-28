@@ -44,7 +44,7 @@
             lattice,
             atoms,
             positions;
-            exx_kernel = DFTK.Coulomb(DFTK.ProbeCharge()),
+            exx_kernel = DFTK.ProbeCharge(DFTK.BareCoulomb()),
         )
         basis_hf = PlaneWaveBasis(model_hf; Ecut = Ecut, kgrid = [1, 1, 1])
 
@@ -102,7 +102,7 @@
             lattice,
             atoms,
             positions;
-            exx_kernel = DFTK.Coulomb(DFTK.ProbeCharge()),
+            exx_kernel = DFTK.ProbeCharge(DFTK.BareCoulomb()),
         )
         basis_hf = PlaneWaveBasis(model_hf; Ecut = Ecut, kgrid = [1, 1, 1])
         scfres_hf = self_consistent_field(
@@ -162,7 +162,7 @@
             lattice,
             atoms,
             positions;
-            exx_kernel = DFTK.Coulomb(DFTK.ProbeCharge()),
+            exx_kernel = DFTK.ProbeCharge(DFTK.BareCoulomb()),
         )
         basis_hf = PlaneWaveBasis(model_hf; Ecut = Ecut, kgrid = [1, 1, 1])
         scfres_hf = self_consistent_field(
@@ -221,7 +221,7 @@
             lattice,
             atoms,
             positions;
-            exx_kernel = DFTK.Coulomb(DFTK.ProbeCharge()),
+            exx_kernel = DFTK.ProbeCharge(DFTK.BareCoulomb()),
         )
         basis_hf = PlaneWaveBasis(model_hf; Ecut = Ecut, kgrid = [1, 1, 1])
         scfres_hf = self_consistent_field(

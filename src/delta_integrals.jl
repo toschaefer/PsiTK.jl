@@ -11,9 +11,10 @@ function _ifft_matrix(basis, kpt, ψ_mat)
 end
 
 """
-    compute_delta_integrals(holes::OrbitalSpace, ::Val{:HH})
+    compute_delta_integrals(basis, ψ_holes, ::Val{:HH})
 
-Compute the 2-index Delta integrals (Hole-Hole) on the real space grid.
+Compute the 2-index Delta integrals (Hole-Hole) of the hole orbitals `ψ_holes` (per
+k-point, Gamma-only) on the real space grid of `basis`.
 
 # Mathematical Definition
 These integrals represent the overlap between two hole orbitals evaluated on the real-space grid:
@@ -22,11 +23,9 @@ These integrals represent the overlap between two hole orbitals evaluated on the
 ```
 For perfectly orthonormal orbitals and an infinitely dense grid, this evaluates to the Kronecker delta ``\\delta_{ij}``. The grid-based numerical representation is returned.
 """
-function compute_delta_integrals(holes::OrbitalSpace, ::Val{:HH})
-    basis = holes.basis
-    
+function compute_delta_integrals(basis, ψ_holes, ::Val{:HH})
     # Transform holes to real space and flatten spatial dimensions
-    ψ_holes_real_flat = _ifft_matrix(basis, basis.kpoints[1], holes.ψ[1])
+    ψ_holes_real_flat = _ifft_matrix(basis, basis.kpoints[1], ψ_holes[1])
     
     # DeltaIntegrals_ij = sum_r ψ_i^*(r) ψ_j(r) * dvol
     DeltaIntegralsHH = (ψ_holes_real_flat' * ψ_holes_real_flat) .* basis.dvol
@@ -34,9 +33,11 @@ function compute_delta_integrals(holes::OrbitalSpace, ::Val{:HH})
 end
 
 """
-    compute_delta_integrals(particles::OrbitalSpace, holes::OrbitalSpace, ::Val{:PPHH})
+    compute_delta_integrals(basis, ψ_particles, ψ_holes, ::Val{:PPHH})
 
-Compute the 4-index Delta integrals (Particle-Particle-Hole-Hole) on the real space grid.
+Compute the 4-index Delta integrals (Particle-Particle-Hole-Hole) of the particle orbitals
+`ψ_particles` and hole orbitals `ψ_holes` (per k-point, Gamma-only) on the real space grid
+of `basis`.
 
 # Mathematical Definition
 These integrals represent the 4-orbital pointwise overlap between two particle orbitals and two hole orbitals:
@@ -46,15 +47,13 @@ These integrals represent the 4-orbital pointwise overlap between two particle o
 These quantities naturally emerge when decomposing two-electron Coulomb integrals using resolution of the identity or real-space vertex tensors. 
 The returned tensor has the dimensions ``(N_{\\text{particles}}, N_{\\text{particles}}, N_{\\text{holes}}, N_{\\text{holes}})``.
 """
-function compute_delta_integrals(particles::OrbitalSpace, holes::OrbitalSpace, ::Val{:PPHH})
-    basis = holes.basis
-    
-    ψ_holes_real_flat = _ifft_matrix(basis, basis.kpoints[1], holes.ψ[1])
-    ψ_particles_real_flat = _ifft_matrix(basis, basis.kpoints[1], particles.ψ[1])
+function compute_delta_integrals(basis, ψ_particles, ψ_holes, ::Val{:PPHH})
+    ψ_holes_real_flat = _ifft_matrix(basis, basis.kpoints[1], ψ_holes[1])
+    ψ_particles_real_flat = _ifft_matrix(basis, basis.kpoints[1], ψ_particles[1])
     
     N_grid = prod(basis.fft_size)
-    N_holes = size(holes.ψ[1], 2)
-    N_particles = size(particles.ψ[1], 2)
+    N_holes = size(ψ_holes[1], 2)
+    N_particles = size(ψ_particles[1], 2)
     
     # We want DeltaIntegrals_abij = sum_r ψ_a^*(r) ψ_b^*(r) ψ_i(r) ψ_j(r) * dvol
     # For efficiency with BLAS, we form pairs:

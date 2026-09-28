@@ -44,7 +44,7 @@ using PseudoPotentialData
 # Hartree-Fock for a helium atom in a box with DFTK
 He = ElementPsp(:He, PseudoFamily("dojo.nc.sr.pbe.v0_5.stringent.upf"))
 lattice = 10.0 * [1 0 0; 0 1 0; 0 0 1]
-model = model_HF(lattice, [He], [[0.5, 0.5, 0.5]]; exx_kernel=Coulomb(ProbeCharge()))
+model = model_HF(lattice, [He], [[0.5, 0.5, 0.5]]; exx_kernel=ProbeCharge(BareCoulomb()))
 basis = PlaneWaveBasis(model; Ecut=15, kgrid=[1, 1, 1])
 scfres = self_consistent_field(basis; exxalg=DFTK.AceExx())
 

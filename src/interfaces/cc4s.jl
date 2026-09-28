@@ -100,7 +100,7 @@ Write Cc4s input files (*.yaml and *.elements):
 Requires a Gamma-only calculation with integer occupations.
 
 # Arguments
-- `active_space`: the `OrbitalSpace` containing the bands (occupations and eigenvalues)
+- `active_space`: the `OrbitalSpace` containing the bands (occupation and eigenvalues)
 - `fitting`: the [`DensityFitting`](@ref) of the active space, uncompressed from
   [`compute_coulomb_vertex`](@ref) or compressed by [`compress_coulomb_vertex`](@ref)
 - `folder`: the target folder (created if missing)
@@ -120,16 +120,20 @@ function dump_cc4s_files(
         error("Cc4s interface requires orthonormal canonical orbitals. " *
               "Apply `canonicalize_orbitals` to the active space first.")
     end
+    size(fitting.Γ, 2) == size(fitting.Γ, 4) == size(active_space.ψ[1], 2) ||
+        error("The Coulomb vertex does not match the active space. Compute `fitting` " *
+              "from `active_space` itself.")
     mkpath(folder)
 
     # --- dump Eigenvalues
     # For cc4s we just pass the eigenvalues from the active space
     # (Assuming 1 kpoint for now)
+    basis = active_space.basis
     eigenvalues = active_space.eigenvalues
     εF = active_space.εF  # Fermi level
 
     # Cc4s only supports gapped systems with integer occupancies
-    for occ in active_space.occupations[1]
+    for occ in active_space.occupation[1]
         if !(occ ≈ 0.0 || occ ≈ 1.0 || occ ≈ 2.0)
             error("Cc4s interface requires integer occupancies. Fractional occupations detected.")
         end
@@ -148,7 +152,7 @@ function dump_cc4s_files(
     particle_space = select_orbitals(active_space, idx_parts)
 
     # --- dump DeltaIntegralsHH
-    DeltaIntegralsHH = compute_delta_integrals(hole_space, Val(:HH))
+    DeltaIntegralsHH = compute_delta_integrals(basis, hole_space.ψ, Val(:HH))
     N_occ = size(DeltaIntegralsHH, 1)
     
     # Row-major ordering for C++: i, j
@@ -166,7 +170,9 @@ function dump_cc4s_files(
     )
 
     # --- dump DeltaIntegralsPPHH
-    DeltaIntegralsPPHH = compute_delta_integrals(particle_space, hole_space, Val(:PPHH))
+    DeltaIntegralsPPHH = compute_delta_integrals(
+        basis, particle_space.ψ, hole_space.ψ, Val(:PPHH)
+    )
     N_virt = size(DeltaIntegralsPPHH, 1)
     
     # Row-major ordering for C++: a, b, i, j
@@ -189,7 +195,7 @@ function dump_cc4s_files(
     )
 
     # --- dump Grid Vectors
-    files_grid = write_grid_vectors(folder, active_space.basis, fitting.G_vectors; force)
+    files_grid = write_grid_vectors(folder, basis, fitting.G_vectors; force)
 
     # --- dump Coulomb Potential
     files_pot = write_coulomb_potential(folder, fitting.kernel_fourier; force)

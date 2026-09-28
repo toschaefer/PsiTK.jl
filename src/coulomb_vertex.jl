@@ -1,28 +1,25 @@
 @doc raw"""
-    compute_overlap_densities(
-        bra_space::OrbitalSpace,
-        ket_space::OrbitalSpace;
-        n_bands_bra=size(bra_space.ψ[1], 2),
-        n_bands_ket=size(ket_space.ψ[1], 2),
-        Ecut_ratio=1.0,
-        callback=identity
-    )
-    compute_overlap_densities(space::OrbitalSpace; n_bands=size(space.ψ[1], 2), kwargs...)
+    compute_overlap_densities(basis, ψ_bra, ψ_ket; Ecut_ratio=1.0, callback=identity)
+    compute_overlap_densities(basis, ψ; kwargs...)
+    compute_overlap_densities(bra_space::OrbitalSpace, ket_space::OrbitalSpace; kwargs...)
+    compute_overlap_densities(space::OrbitalSpace; kwargs...)
 
 Compute the overlap densities in reciprocal space
 ```math
 ρ_{mn \bm G} = \int_Ω \; \psi_{m}(\bm r)^∗ \psi_{n}(\bm r)  \; e^{-i\bm r \bm G}  \; d^3 r
 ```
+for all orbitals in `ψ_bra` and `ψ_ket`. To restrict the orbitals, pass a subset (e.g. via
+[`select_orbitals`](@ref)).
 
 # Arguments
-- `bra_space`: the bra orbital space (e.g. occupied space)
-- `ket_space`: the ket orbital space (e.g. virtual space)
-- `space`: a single orbital space used as both bra and ket. Only the upper triangle
-  ``m ≤ n`` is computed, the rest follows from ``ρ_{nm,-\bm G} = ρ_{mn \bm G}^∗``.
-  This shortcut is taken whenever `bra_space === ket_space`.
-- `n_bands_bra`: number of bands to be considered from bra_space
-- `n_bands_ket`: number of bands to be considered from ket_space
-- `n_bands`: number of bands to be considered from `space` (bra and ket alike)
+- `basis`: the `PlaneWaveBasis` of the orbitals
+- `ψ_bra`: the bra orbitals per k-point (e.g. occupied orbitals)
+- `ψ_ket`: the ket orbitals per k-point (e.g. virtual orbitals)
+- `ψ`: orbitals used as both bra and ket. Only the upper triangle ``m ≤ n`` is computed,
+  the rest follows from ``ρ_{nm,-\bm G} = ρ_{mn \bm G}^∗``. This shortcut is taken
+  whenever `ψ_bra === ψ_ket`.
+- `bra_space`, `ket_space`, `space`: [`OrbitalSpace`](@ref)s, a shorthand for passing
+  their `basis` and `ψ`
 - `Ecut_ratio`: ratio of the plane-wave cutoff (in energy) for the densities relative to
   the orbital cutoff `basis.Ecut` (default: 1.0). Values up to `supersampling^2` of the
   basis (4 for DFTK's default) are allowed since the FFT grid holds products of orbitals
@@ -32,36 +29,34 @@ Compute the overlap densities in reciprocal space
 
 # Returns
 A tuple `(ρmnG, G_vectors)`:
-- `ρmnG`: the overlap densities as a tensor of shape `(nk, n_bands_bra, nk, n_bands_ket, nG)`.
+- `ρmnG`: the overlap densities as a tensor of shape `(nk, n_bra, nk, n_ket, nG)`.
 - `G_vectors`: the corresponding plane-wave vectors.
 """
 function compute_overlap_densities(
-    bra_space::OrbitalSpace,
-    ket_space::OrbitalSpace;
-    n_bands_bra = size(bra_space.ψ[1], 2),
-    n_bands_ket = size(ket_space.ψ[1], 2),
+    basis,
+    ψ_bra,
+    ψ_ket;
     Ecut_ratio = 1.0,
     callback = identity,
 )
-    basis = bra_space.basis
     all(kpt -> iszero(kpt.coordinate), basis.kpoints) ||
         error("Overlap densities are only implemented for Gamma-point calculations.")
     G_indices = _G_indices_within_cutoff(basis, Ecut_ratio)
-    ρmnG = _compute_overlap_densities(
-        basis,
-        bra_space.ψ,
-        ket_space.ψ;
-        n_bands_bra,
-        n_bands_ket,
-        G_indices,
-        callback,
-    )
-
+    ρmnG = _compute_overlap_densities(basis, ψ_bra, ψ_ket; G_indices, callback)
     return ρmnG, G_vectors(basis)[G_indices]
 end
-
-function compute_overlap_densities(space::OrbitalSpace; n_bands = size(space.ψ[1], 2), kwargs...)
-    return compute_overlap_densities(space, space; n_bands_bra=n_bands, n_bands_ket=n_bands, kwargs...)
+function compute_overlap_densities(basis, ψ; kwargs...)
+    return compute_overlap_densities(basis, ψ, ψ; kwargs...)
+end
+function compute_overlap_densities(
+    bra_space::OrbitalSpace,
+    ket_space::OrbitalSpace;
+    kwargs...,
+)
+    return compute_overlap_densities(bra_space.basis, bra_space.ψ, ket_space.ψ; kwargs...)
+end
+function compute_overlap_densities(space::OrbitalSpace; kwargs...)
+    return compute_overlap_densities(space.basis, space.ψ; kwargs...)
 end
 
 # Linear indices into the full FFT cube G_vectors(basis) of the G vectors with
@@ -83,15 +78,16 @@ end
 
 @doc raw"""
     compute_coulomb_vertex(
-        bra_space::OrbitalSpace,
-        ket_space::OrbitalSpace;
-        interaction_kernel=DFTK.Coulomb(DFTK.ProbeCharge()),
-        n_bands_bra=size(bra_space.ψ[1], 2),
-        n_bands_ket=size(ket_space.ψ[1], 2),
+        basis,
+        ψ_bra,
+        ψ_ket;
+        interaction_kernel=DFTK.ProbeCharge(DFTK.BareCoulomb()),
         Ecut_ratio=2/3,
         callback=identity
     )
-    compute_coulomb_vertex(space::OrbitalSpace; n_bands=size(space.ψ[1], 2), kwargs...)
+    compute_coulomb_vertex(basis, ψ; kwargs...)
+    compute_coulomb_vertex(bra_space::OrbitalSpace, ket_space::OrbitalSpace; kwargs...)
+    compute_coulomb_vertex(space::OrbitalSpace; kwargs...)
 
 Compute the Coulomb vertex
 ```math
@@ -102,46 +98,41 @@ and $v(\bm G)$ is the interaction kernel, e.g. the Coulomb potential
 ```math
 v(\bm G) = \frac{4π}{\bm G^2}
 ```
+for all orbitals in `ψ_bra` and `ψ_ket`. To restrict the orbitals, pass a subset (e.g. via
+[`select_orbitals`](@ref)).
 
 # Arguments
-- `bra_space`: the bra orbital space (e.g. occupied space)
-- `ket_space`: the ket orbital space (e.g. virtual space)
-- `space`: a single orbital space used as both bra and ket, exploiting the symmetry
+- `basis`: the `PlaneWaveBasis` of the orbitals
+- `ψ_bra`: the bra orbitals per k-point (e.g. occupied orbitals)
+- `ψ_ket`: the ket orbitals per k-point (e.g. virtual orbitals)
+- `ψ`: orbitals used as both bra and ket, exploiting the symmetry
   ``Γ_{nm,-\bm G} = Γ_{mn \bm G}^∗`` (see [`compute_overlap_densities`](@ref))
-- `interaction_kernel`: the DFTK interaction kernel to use (default: Coulomb)
-- `n_bands_bra`: number of bands to be considered from bra_space
-- `n_bands_ket`: number of bands to be considered from ket_space
-- `n_bands`: number of bands to be considered from `space` (bra and ket alike)
+- `bra_space`, `ket_space`, `space`: [`OrbitalSpace`](@ref)s, a shorthand for passing
+  their `basis` and `ψ`
+- `interaction_kernel`: the DFTK `InteractionKernel` (default: bare Coulomb with the
+  probe-charge singularity treatment, `ProbeCharge(BareCoulomb())`)
 - `Ecut_ratio`: cutoff ratio for the vertex (default: 2/3), see [`compute_overlap_densities`](@ref)
 - `callback`: called after each orbital pair with `(; step, total_steps)`,
   e.g. `callback=ShowProgress()` for a progress bar (default: no output)
 
 # Returns
 A [`DensityFitting`](@ref) holding the uncompressed vertex `Γ` (shape
-`(nk, n_bands_bra, nk, n_bands_ket, nG)`), its `G_vectors` and the `kernel_fourier`.
+`(nk, n_bra, nk, n_ket, nG)`), its `G_vectors` and the `kernel_fourier`.
 """
 function compute_coulomb_vertex(
-    bra_space::OrbitalSpace,
-    ket_space::OrbitalSpace;
-    interaction_kernel = DFTK.Coulomb(DFTK.ProbeCharge()),
-    n_bands_bra = size(bra_space.ψ[1], 2),
-    n_bands_ket = size(ket_space.ψ[1], 2),
+    basis,
+    ψ_bra,
+    ψ_ket;
+    interaction_kernel = DFTK.ProbeCharge(DFTK.BareCoulomb()),
     Ecut_ratio = 2/3,
     callback = identity,
 )
-    ρmnG, G_vectors = compute_overlap_densities(
-        bra_space,
-        ket_space;
-        n_bands_bra,
-        n_bands_ket,
-        Ecut_ratio,
-        callback,
-    )
+    ρmnG, G_vectors = compute_overlap_densities(basis, ψ_bra, ψ_ket; Ecut_ratio, callback)
 
     # Kernel on the full FFT cube for momentum transfer q = 0 (Gamma-only)
-    basis = bra_space.basis
     G_indices = _G_indices_within_cutoff(basis, Ecut_ratio)
-    kernel_cube = DFTK.compute_kernel_fourier(interaction_kernel, basis, basis.kpoints[1])
+    q = zero(DFTK.Vec3{eltype(basis)})
+    kernel_cube = DFTK.eval_kernel_fourier(interaction_kernel, basis, q)
     kernel_fourier = kernel_cube[G_indices]
 
     # Γ = √v ⊙ ρ along the G axis; ρmnG is not needed anymore, so scale in place
@@ -150,9 +141,14 @@ function compute_coulomb_vertex(
 
     return DensityFitting(ΓmnG, G_vectors, kernel_fourier, nothing)
 end
-
-function compute_coulomb_vertex(space::OrbitalSpace; n_bands = size(space.ψ[1], 2), kwargs...)
-    return compute_coulomb_vertex(space, space; n_bands_bra=n_bands, n_bands_ket=n_bands, kwargs...)
+function compute_coulomb_vertex(basis, ψ; kwargs...)
+    return compute_coulomb_vertex(basis, ψ, ψ; kwargs...)
+end
+function compute_coulomb_vertex(bra_space::OrbitalSpace, ket_space::OrbitalSpace; kwargs...)
+    return compute_coulomb_vertex(bra_space.basis, bra_space.ψ, ket_space.ψ; kwargs...)
+end
+function compute_coulomb_vertex(space::OrbitalSpace; kwargs...)
+    return compute_coulomb_vertex(space.basis, space.ψ; kwargs...)
 end
 
 # This function initially based on code of the experimental "cc4s" branch in DFTK written by Michael Herbst
@@ -160,12 +156,12 @@ function _compute_overlap_densities(
     basis,
     ψ_bra::AbstractVector{<:AbstractArray{T}},
     ψ_ket::AbstractVector{<:AbstractArray{T}};
-    n_bands_bra = size(ψ_bra[1], 2),
-    n_bands_ket = size(ψ_ket[1], 2),
     G_indices = eachindex(G_vectors(basis)),
     callback = identity,
 ) where {T}
     n_kpt = length(basis.kpoints)
+    n_bands_bra = size(ψ_bra[1], 2)
+    n_bands_ket = size(ψ_ket[1], 2)
 
     # === Create index to map each stored G to -G on the full FFT cube ===
     Gs = G_vectors(basis)
