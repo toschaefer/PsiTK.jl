@@ -60,7 +60,7 @@
 
         scfres_hf = self_consistent_field(
             basis_hf;
-            solver=DFTK.scf_damping_solver(damping=1.0),
+            solver=ScfDampingSolver(),
             is_converged=ScfConvergenceEnergy(1e-8),
             ρ=scfres_pbe.ρ,
             ψ=scfres_pbe.ψ,
@@ -127,7 +127,7 @@
         basis_hf = PlaneWaveBasis(model_hf; Ecut, kgrid=[1, 1, 1])
         scfres_hf = self_consistent_field(
             basis_hf;
-            solver=DFTK.scf_damping_solver(damping=1.0),
+            solver=ScfDampingSolver(),
             is_converged=ScfConvergenceEnergy(1e-8),
             ρ=scfres_pbe.ρ,
             ψ=scfres_pbe.ψ,
@@ -197,7 +197,7 @@
         basis_hf = PlaneWaveBasis(model_hf; Ecut, kgrid=[1, 1, 1])
         scfres_hf = self_consistent_field(
             basis_hf;
-            solver=DFTK.scf_damping_solver(damping=1.0),
+            solver=ScfDampingSolver(),
             is_converged=ScfConvergenceEnergy(1e-8),
             ρ=scfres_pbe.ρ,
             ψ=scfres_pbe.ψ,
@@ -266,7 +266,7 @@
         basis_hf = PlaneWaveBasis(model_hf; Ecut, kgrid=[1, 1, 1])
         scfres_hf = self_consistent_field(
             basis_hf;
-            solver=DFTK.scf_damping_solver(damping=1.0),
+            solver=ScfDampingSolver(),
             is_converged=ScfConvergenceEnergy(1e-8),
             ρ=scfres_pbe.ρ,
             ψ=scfres_pbe.ψ,
