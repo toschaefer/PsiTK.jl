@@ -6,10 +6,12 @@
 
 Compute the overlap densities in reciprocal space
 ```math
-ρ_{mn \bm G} = \int_Ω \; \psi_{m}(\bm r)^∗ \psi_{n}(\bm r)  \; e^{-i\bm r \bm G}  \; d^3 r
+ρ_{mn \bm G} = \frac{1}{\sqrt{Ω}} \int_Ω \; \psi_{m}(\bm r)^∗ \psi_{n}(\bm r)
+               \; e^{-i\bm r \bm G}  \; d^3 r
 ```
-for all orbitals in `ψ_bra` and `ψ_ket`. To restrict the orbitals, pass a subset (e.g. via
-[`select_orbitals`](@ref)).
+i.e. the coefficients of ``\psi_m^∗ \psi_n`` in the orthonormal plane waves
+``e^{i\bm r \bm G}/\sqrt{Ω}`` (DFTK's `fft` convention), for all orbitals in `ψ_bra` and
+`ψ_ket`. To restrict the orbitals, pass a subset (e.g. via [`select_orbitals`](@ref)).
 
 # Arguments
 - `basis`: the `PlaneWaveBasis` of the orbitals
@@ -288,6 +290,16 @@ function compress_coulomb_vertex(fitting::DensityFitting, strategy)
     singular_vectors = isnothing(U_prev) ? U : U_prev * U
     return DensityFitting(ΓmnF, fitting.G_vectors, fitting.kernel_fourier, singular_vectors)
 end
+
+"""
+    _compress_coulomb_vertex(Γ, strategy) -> (Γ_F, U)
+
+Extension point for the compression strategies of [`compress_coulomb_vertex`](@ref):
+compress the vertex `Γ` of shape `(nk, n_bands, nk, n_bands, NG)` along its auxiliary axis
+to `Γ_F = Γ U` of shape `(nk, n_bands, nk, n_bands, NF)`, with the transformation `U` of
+shape `(NG, NF)`.
+"""
+function _compress_coulomb_vertex end
 
 @doc raw"""
     CoulombGramian(; thresh=1e-6)

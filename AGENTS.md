@@ -9,7 +9,10 @@ The code design is described in `CONTRIBUTING.md`.
 * **Readable & Simple:** Simplicity over feature count. While performance is the ultimate priority, prioritize transparent and hackable implementations over clever brevity.
 * **Code as Documentation:** The code itself is the primary documentation. 
   * Keep functions short and trackable.
-  * Write docstrings ONLY for the public API or highly non-obvious user-facing functions. Every exported name needs a docstring (`docs/make.jl` builds with `checkdocs = :exports` and fails otherwise); `docs/src/code_reference.md` picks them up automatically via `@autodocs`, so never list functions there by hand. When one docstring covers several methods (e.g. a convenience form), its argument list must explain every signature.
+  * Write docstrings for the public API and for the internals a developer needs to extend or understand the code. `docs/src/code_reference.md` collects them automatically via `@autodocs` into "Public API" and "Developer Reference (Internals)", so never list functions there by hand.
+    * **Public API:** every exported name needs a docstring (`docs/make.jl` builds with `checkdocs = :exports` and fails otherwise).
+    * **Internals:** extension points (e.g. `_eigenproblems`, `_solve`, `_compress_coulomb_vertex`) and non-trivial internal types (e.g. `LevelShiftedOperator`) get a docstring too. Small helpers get at most a comment.
+    * When one docstring covers several methods (e.g. a convenience form), its argument list must explain every signature.
   * Use inline comments ONLY to explain physics/math reasoning, subtle normalizations, or workarounds. Never restate what the code mechanically does.
 
 ## Device-Agnostic Code (GPU/CPU)

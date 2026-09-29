@@ -58,11 +58,25 @@ Base.@kwdef struct MaximalExchangeVirtuals
     n_orbitals::Int
 end
 
+"""
+Union of the virtual-orbital targets accepted by [`generate_orbitals`](@ref). A new target
+is added here and implements [`_eigenproblems`](@ref) and [`_is_orthonormal`](@ref).
+"""
 const VirtualOrbitalTarget =
     Union{DensitySpecificVirtuals,CanonicalVirtuals,MaximalExchangeVirtuals}
 
-# --- Eigenvalue problems: per k-point (; A, B, ε_offset) such that the lowest eigenpairs
-#     of A φ = λ B φ are the wanted orbitals with eigenvalue λ + ε_offset ---
+# --- Eigenvalue problems ---
+
+"""
+    _eigenproblems(target, occ_space, ham)
+
+Extension point for virtual-orbital targets: the eigenvalue problem that defines the
+virtual orbitals of `target`, as a vector over k-points of `(; A, B, ε_offset)`. The lowest
+eigenpairs of `A φ = λ B φ` (`B = I` for a standard eigenvalue problem) are the wanted
+orbitals with eigenvalues `λ + ε_offset`. The eigenvalue problem is solved by
+[`_solve`](@ref), so targets and eigensolvers combine freely.
+"""
+function _eigenproblems end
 
 # Fock operator with the occupied space pushed above the virtual spectrum
 function _levelshifted_fock(ham_k, ψocc_k, εocc_k)
@@ -114,7 +128,14 @@ function _n_orbitals(target::VirtualOrbitalTarget, n_G, n_occ)
     return target.n_orbitals
 end
 
-# Generalized eigenvectors (B ≠ I) are only B-orthonormal
+"""
+    _is_orthonormal(target)
+
+Whether the orbitals generated for `target` are orthonormal. Solutions of a generalized
+eigenvalue problem (`B ≠ I` in [`_eigenproblems`](@ref)) are only `B`-orthonormal.
+"""
+function _is_orthonormal end
+
 _is_orthonormal(::CanonicalVirtuals) = true
 _is_orthonormal(::DensitySpecificVirtuals) = false
 _is_orthonormal(::MaximalExchangeVirtuals) = true

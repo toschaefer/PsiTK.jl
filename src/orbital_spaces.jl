@@ -1,8 +1,10 @@
 """
     OrbitalSpace{B,T,R<:Real}
+    OrbitalSpace(scfres)
 
 A generic representation of an orbital manifold. Decouples the basis and orbitals
-from stateful host objects like DFTK's `scfres`.
+from stateful host objects like DFTK's `scfres`. `OrbitalSpace(scfres)` takes all orbitals
+of a converged DFTK SCF, occupied and unoccupied (see [`split_occupied_virtual`](@ref)).
 
 # Fields
 - `basis::B`: The underlying basis (e.g., PlaneWaveBasis).
@@ -10,6 +12,8 @@ from stateful host objects like DFTK's `scfres`.
 - `eigenvalues::Vector{Vector{R}}`: The energies per k-point.
 - `occupation::Vector{Vector{R}}`: The fractional occupations per k-point.
 - `εF::R`: The Fermi energy of the system.
+- `is_orthonormal::Bool`: Whether the orbitals are orthonormal, which e.g.
+  [`DensitySpecificVirtuals`](@ref) are not (see [`canonicalize_orbitals`](@ref)).
 """
 struct OrbitalSpace{B,T,R<:Real}
     basis::B

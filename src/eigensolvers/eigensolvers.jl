@@ -29,8 +29,14 @@ struct FullDiagonalization end
 
 include("davidson.jl")
 
-# --- Solvers: lowest size(X0, 2) eigenpairs of A φ = λ B φ (technical) ---
-# Return (; λ, X) with the eigenvalues λ and eigenvectors X as columns.
+"""
+    _solve(A, B, X0, preconditioner, solver) -> (; λ, X)
+
+Extension point for eigensolvers: the lowest `size(X0, 2)` eigenpairs of `A φ = λ B φ`
+(`B` may be `I`) with the eigenvalues `λ` and the eigenvectors as columns of `X`, starting
+from the guess `X0`. The eigenvalue problems come from [`_eigenproblems`](@ref).
+"""
+function _solve end
 
 function _solve(A, B, X0, preconditioner, solver::LOBPCG)
     res = lobpcg(A, X0, B, preconditioner, solver.tol, solver.maxiter; solver.callback)

@@ -1,11 +1,11 @@
 """
-    LevelShiftedOperator(base_op, V, ε_ref, safe_shift, penalty)
+    LevelShiftedOperator(base_op, V, ε_homo, safe_shift, penalty)
 
 A wrapper that applies a constant energy shift and a strong penalty to a projected subspace.
 When applied to a vector `X`, it computes:
-    (base_op - ε_ref + safe_shift) * X + penalty * V * (V' * X)
+    (base_op - ε_homo + safe_shift) * X + penalty * V * (V' * X)
 
-This effectively shifts the entire spectrum by `safe_shift - ε_ref`, while artificially
+This effectively shifts the entire spectrum by `safe_shift - ε_homo`, while artificially
 pushing the eigenvalues of the subspace defined by `V` up by `penalty`.
 Useful for isolating virtual manifolds or forcing iterative eigensolvers away from an
 occupied subspace.
