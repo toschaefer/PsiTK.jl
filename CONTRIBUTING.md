@@ -3,7 +3,8 @@
 Contributions via pull request are welcome. Please:
 
 - Add tests for new functionality as `@testitem`s with a tag (see `test/runtests.jl`).
-- Add a docstring to every exported name; the documentation build fails otherwise.
+- Add docstrings to the public API and to the internals a developer needs; see `AGENTS.md`
+  for the details.
 - Follow the existing code style ([Blue Style](https://github.com/invenia/BlueStyle),
   lines of about 92 characters).
 - Keep pull requests focused on a single change or feature.
