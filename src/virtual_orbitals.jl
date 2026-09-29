@@ -22,12 +22,12 @@ space
 ```math
 \mathcal K \varphi  =  \lambda h \varphi
 ```
-where $\mathcal K$ and $h$ are the Fock exchange operator and the Fock Hamiltonian,
+where ``\mathcal K`` and ``h`` are the Fock exchange operator and the Fock Hamiltonian,
 respectively.
 
-The generated orbitals are NOT orthonormal (they are $h$-orthonormal), and their
-`eigenvalues` are the generalized Rayleigh quotients $\lambda_i$, not orbital energies. Use
-[`canonicalize_orbitals`](@ref) to obtain orthonormal orbitals with Fock energies.
+The generated orbitals are NOT orthonormal (they are ``h``-orthonormal), and their
+`eigenvalues` are the generalized Rayleigh quotients ``\lambda_i``, not orbital energies.
+Use [`canonicalize_orbitals`](@ref) to obtain orthonormal orbitals with Fock energies.
 """
 Base.@kwdef struct DensitySpecificVirtuals
     n_orbitals::Int
@@ -52,7 +52,7 @@ interaction with the occupied space, i.e. the lowest (most negative) eigenpairs 
 ```math
 \mathcal K \varphi  =  \lambda \varphi
 ```
-where $\mathcal K$ is the Fock exchange operator.
+where ``\mathcal K`` is the Fock exchange operator.
 """
 Base.@kwdef struct MaximalExchangeVirtuals
     n_orbitals::Int

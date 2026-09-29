@@ -13,6 +13,7 @@ The code design is described in `CONTRIBUTING.md`.
     * **Public API:** every exported name needs a docstring (`docs/make.jl` builds with `checkdocs = :exports` and fails otherwise).
     * **Internals:** extension points (e.g. `_eigenproblems`, `_solve`, `_compress_coulomb_vertex`) and non-trivial internal types (e.g. `LevelShiftedOperator`) get a docstring too. Small helpers get at most a comment.
     * When one docstring covers several methods (e.g. a convenience form), its argument list must explain every signature.
+    * Write formulas in LaTeX: ```` ```math ```` blocks for displayed equations and double backticks (``` ``x`` ```) for inline math. Use `@doc raw"""` for docstrings with LaTeX, so backslashes need no escaping.
   * Use inline comments ONLY to explain physics/math reasoning, subtle normalizations, or workarounds. Never restate what the code mechanically does.
 
 ## Device-Agnostic Code (GPU/CPU)

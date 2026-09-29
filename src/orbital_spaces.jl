@@ -77,7 +77,7 @@ function merge_spaces(
     )
 end
 
-"""
+@doc raw"""
     canonicalize_orbitals(space::OrbitalSpace, hamiltonian; occupation_tol=1e-4)
 
 Diagonalizes the Fock Hamiltonian in the subspace defined by `space.ψ` to return
@@ -90,13 +90,14 @@ The aufbau occupation reproduces the input one only if the diagonalization does 
 orbitals of different occupation, e.g. for a converged SCF canonicalized with its own
 Hamiltonian. Otherwise, e.g. for DFT orbitals canonicalized with a Fock operator, it
 defines a different determinant, which is not self-consistent with `hamiltonian`. A
-warning is issued if the input density matrix, expressed in the canonical orbitals,
-deviates from the aufbau occupation by more than `occupation_tol` in any element.
+warning is issued if the input density matrix ``γ = \sum_i f_i |ψ_i⟩⟨ψ_i|``, expressed in
+the canonical orbitals, deviates from the aufbau occupation by more than `occupation_tol`
+in any element.
 
-A deviation `d` corresponds to an occupied-virtual mixing angle `θ ≈ d / f` (with `f` the
-occupation, e.g. 2) and changes the energy of the determinant by the order of `θ²` times
-the orbital energy gap. The default thus flags changes beyond those left by an SCF
-converged to about 1e-9 Hartree in the total energy.
+A deviation ``d`` corresponds to an occupied-virtual mixing angle ``θ ≈ d / f`` (with ``f``
+the occupation, e.g. 2) and changes the energy of the determinant by the order of ``θ^2``
+times the orbital energy gap. The default thus flags changes beyond those left by an SCF
+converged to about ``10^{-9}`` Hartree in the total energy.
 """
 function canonicalize_orbitals(
     space::OrbitalSpace{B,T,R},

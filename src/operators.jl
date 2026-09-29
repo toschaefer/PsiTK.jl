@@ -1,12 +1,14 @@
-"""
+@doc raw"""
     LevelShiftedOperator(base_op, V, ε_homo, safe_shift, penalty)
 
 A wrapper that applies a constant energy shift and a strong penalty to a projected subspace.
-When applied to a vector `X`, it computes:
-    (base_op - ε_homo + safe_shift) * X + penalty * V * (V' * X)
-
-This effectively shifts the entire spectrum by `safe_shift - ε_homo`, while artificially
-pushing the eigenvalues of the subspace defined by `V` up by `penalty`.
+Applied to a vector ``X``, it computes
+```math
+(A - ε_\text{homo} + s) X + p \, V V^\dagger X
+```
+with ``A`` = `base_op`, ``ε_\text{homo}`` = `ε_homo`, ``s`` = `safe_shift` and
+``p`` = `penalty`. This shifts the entire spectrum by ``s - ε_\text{homo}``, while
+artificially pushing the eigenvalues of the subspace spanned by ``V`` up by ``p``.
 Useful for isolating virtual manifolds or forcing iterative eigensolvers away from an
 occupied subspace.
 """
@@ -48,17 +50,18 @@ Base.size(op::LevelShiftedOperator, args...) = size(op.base_op, args...)
 Base.eltype(op::LevelShiftedOperator) = eltype(op.base_op)
 LinearAlgebra.ishermitian(op::LevelShiftedOperator) = ishermitian(op.base_op)
 
-"""
+@doc raw"""
     ProjectedShiftedOperator(base_op, V, shift)
 
-A wrapper that projects the operator into the orthogonal complement of the subspace `V`,
-while applying a constant energy `shift` directly to the `V` subspace components.
-
-Mathematically, it acts as:
-    (1 - V * V') * base_op * (1 - V * V') * X + shift * V * (V' * X)
-
-This ensures that the eigensolver remains within the orthogonal complement of `V`,
-by penalizing any components inside `V` with the positive energy `shift`.
+A wrapper that projects the operator into the orthogonal complement of the subspace
+spanned by ``V``, while applying a constant energy `shift` directly to the components in
+that subspace. Applied to a vector ``X``, it computes
+```math
+(1 - V V^\dagger) \, A \, (1 - V V^\dagger) X + σ \, V V^\dagger X
+```
+with ``A`` = `base_op` and ``σ`` = `shift`. This ensures that the eigensolver remains
+within the orthogonal complement of ``V``, by penalizing any components inside it with the
+positive energy ``σ``.
 """
 struct ProjectedShiftedOperator{TOp,TV}
     base_op::TOp       # the base operator

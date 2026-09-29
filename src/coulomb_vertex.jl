@@ -97,8 +97,8 @@ Compute the Coulomb vertex
 ```math
 Γ_{mn \bm G} = \sqrt{v(\bm G)} \; ρ_{mn \bm G}
 ```
-where $ρ_{mn \bm G}$ are the overlap densities (see [`compute_overlap_densities`](@ref))
-and $v(\bm G)$ is the interaction kernel, e.g. the Coulomb potential
+where ``ρ_{mn \bm G}`` are the overlap densities (see [`compute_overlap_densities`](@ref))
+and ``v(\bm G)`` is the interaction kernel, e.g. the Coulomb potential
 ```math
 v(\bm G) = \frac{4π}{\bm G^2}
 ```
@@ -239,7 +239,7 @@ Density-fitting (resolution-of-identity) factorization of the electron repulsion
 ```math
 (pr|qs) \propto \sum_F Γ_{rpF}^∗ \, Γ_{qsF}
 ```
-i.e. the Coulomb vertex $Γ$ together with the auxiliary basis $F$ it is expressed in.
+i.e. the Coulomb vertex ``Γ`` together with the auxiliary basis ``F`` it is expressed in.
 
 # Fields
 - `Γ`: the Coulomb vertex tensor of shape `(nk, n_bands, nk, n_bands, NF)`. The auxiliary
@@ -266,12 +266,12 @@ end
 @doc raw"""
     compress_coulomb_vertex(fitting::DensityFitting, strategy)
 
-Compress the Coulomb vertex along its auxiliary axis into a smaller auxiliary index $F$,
+Compress the Coulomb vertex along its auxiliary axis into a smaller auxiliary index ``F``,
 ```math
 Γ_{mn F} = \sum_{G} Γ_{mn G} \, U_{G F}
 ```
-where the columns of the transformation $U$ span the dominant subspace of the Coulomb
-Gramian $\Gamma^\dagger \Gamma$. How $U$ is determined depends on `strategy`:
+where the columns of the transformation ``U`` span the dominant subspace of the Coulomb
+Gramian ``\Gamma^\dagger \Gamma``. How ``U`` is determined depends on `strategy`:
 - [`CoulombGramian`](@ref): exact diagonalization of the Gramian
 - [`AdaptiveRandomizedSVD`](@ref): randomized range finder followed by diagonalization
 
@@ -309,8 +309,8 @@ Coulomb Gramian
 ```math
 H = - \Gamma^\dagger \Gamma = U \Lambda U^\dagger
 ```
-The compressed $\Gamma$ is then obtained via $\Gamma_\text{compressed} = \Gamma U$,
-where the columns of $U$ are restricted such that $|\lambda| >$ `thresh`.
+The compressed ``\Gamma`` is then obtained via ``\Gamma_\text{compressed} = \Gamma U``,
+where the columns of ``U`` are restricted such that ``|\lambda|`` exceeds `thresh`.
 """
 Base.@kwdef struct CoulombGramian
     thresh::Float64 = 1e-6
@@ -339,29 +339,29 @@ end
 
 Strategy for [`compress_coulomb_vertex`](@ref) via an adaptive randomized SVD.
 
-The algorithm approximates the range of the row space of $\Gamma$ (the orbital indices
-are considered as superindex) through a thin basis Q, such that
+The algorithm approximates the range of the row space of ``\Gamma`` (the orbital indices
+are considered as superindex) through a thin basis ``Q``, such that
 ```math
 \Gamma \approx \Gamma Q Q^\dagger
 ```
-where $\Gamma$ is a $N_{pp} \times N_G$ and $Q$ a $N_G \times N_F$ matrix.
-This is done through a stochastic Q and a diagonalization of
+where ``\Gamma`` is a ``N_{pp} \times N_G`` and ``Q`` a ``N_G \times N_F`` matrix.
+This is done through a stochastic ``Q`` and a diagonalization of
 ```math
 H = -\tilde \Gamma^\dagger \tilde \Gamma = U \Lambda U^\dagger
 ```
-where $\tilde \Gamma = \Gamma Q$.
-The compressed $\Gamma$ is then obtained via $\Gamma_\text{compressed} = \tilde \Gamma U$,
-the effective transformation matrix being $Q U$.
+where ``\tilde \Gamma = \Gamma Q``. The compressed ``\Gamma`` is then obtained via
+``\Gamma_\text{compressed} = \tilde \Gamma U``, the effective transformation matrix being
+``Q U``.
 
-The dimension $N_F$ is found by a preceding adaptive range finder.
-This finder iteratively increases the columns of Q (i.e. $N_F$) in steps of
-$2\sqrt{N_{pp}}$ and stops when the error for each of `n_test_vectors` stochastic test
-vectors $\omega_i$
+The dimension ``N_F`` is found by a preceding adaptive range finder.
+This finder iteratively increases the columns of ``Q`` (i.e. ``N_F``) in steps of
+``2\sqrt{N_{pp}}`` and stops when the error for each of `n_test_vectors` stochastic test
+vectors ``\omega_i``
 ```math
 \varepsilon_i =  \Vert (1 - QQ^\dagger)\Gamma^\dagger \omega_i \Vert
 ```
-is smaller than $\sqrt{\text{thresh}}/2$. With $r$ test vectors this estimator bounds the
-true projection error with probability $1 - 10^{-r}$
+is smaller than ``\sqrt{\text{thresh}}/2``. With ``r`` test vectors this estimator bounds
+the true projection error with probability ``1 - 10^{-r}``
 [Halko, Martinsson, Tropp, SIAM Rev. **53**, 217 (2011), Lemma 4.1]; a single test vector
 would stop the finder too early in a small fraction of runs.
 
