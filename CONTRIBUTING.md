@@ -57,3 +57,41 @@ Extending the code usually means adding one such noun and its methods, for insta
   and a `DensityFitting`, so that only that file knows the solver's file format.
 
 When in doubt, follow the nearest existing example.
+
+## Computational cost
+
+A few functions dominate the runtime and memory of a calculation once there are a few
+hundred virtual orbitals. To keep their cost visible, every public function and every
+extension point (target, solver, compression strategy) whose time or memory grows faster
+than linearly with the system size, i.e. with the number of orbitals or plane waves (log
+factors from FFTs do not count), documents its cost in a `# Cost` section at the end of
+its docstring:
+
+- **time:** the leading terms in O-notation and the step they come from;
+- **memory:** the peak memory in complex numbers (16 bytes each).
+
+A change of the scaling updates this section. Following the split between physics and
+numerics, a target documents the cost of one application of its operators, and a solver
+its cost in terms of operator applications. For example, for `compute_coulomb_vertex`:
+
+```
+# Cost
+Those of [`compute_overlap_densities`](@ref), which the vertex overwrites in place:
+- time: ``O(N_\text{bra} N_\text{ket} N_r \log N_r)``
+- memory: ``N_\text{bra} N_\text{ket} N_G`` complex numbers for `Γ`
+```
+
+Counts use the following symbols. In code, the name is the symbol without the underscore
+of its subscript (``N_G`` ↔ `NG`); counts without a symbol are snake_case (`n_orbitals`).
+Each `# Cost` section states which of its arguments the symbols refer to.
+
+| docstring | code | meaning |
+|---|---|---|
+| ``N_\text{occ}``, ``N_\text{virt}``, ``N`` | `Nocc`, `Nvirt`, `N` | occupied, virtual and all orbitals |
+| ``N_\text{bra}``, ``N_\text{ket}`` | `Nbra`, `Nket` | orbitals on the bra and ket side of a pair |
+| ``N_k`` | `Nk` | k-points |
+| ``N_\text{pw}`` | `Npw` | plane waves of the orbital basis |
+| ``N_G`` | `NG` | plane waves of the overlap densities, set by `Ecut_ratio` |
+| ``N_r`` | `Nr` | points of the FFT grid |
+| ``N_F`` | `NF` | compressed auxiliary index of the Coulomb vertex |
+| ``N_{pp}`` | `Npp` | orbital pairs of the Coulomb vertex, ``N_k^2 N_\text{bra} N_\text{ket}`` |

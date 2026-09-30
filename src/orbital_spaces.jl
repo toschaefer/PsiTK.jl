@@ -98,6 +98,13 @@ A deviation ``d`` corresponds to an occupied-virtual mixing angle ``θ ≈ d / f
 the occupation, e.g. 2) and changes the energy of the determinant by the order of ``θ^2``
 times the orbital energy gap. The default thus flags changes beyond those left by an SCF
 converged to about ``10^{-9}`` Hartree in the total energy.
+
+# Cost
+Per k-point, with ``N`` orbitals in `space`:
+- time: ``N`` applications of `hamiltonian` (``O(N_r \log N_r + N_\text{pw} N_\text{occ})``
+  each with ACE exchange), plus ``O(N_\text{pw} N^2 + N^3)`` for the subspace matrices,
+  their diagonalization and the rotation
+- memory: ``O(N_\text{pw} N)`` complex numbers for the orbitals and their images
 """
 function canonicalize_orbitals(
     space::OrbitalSpace{B,T,R},

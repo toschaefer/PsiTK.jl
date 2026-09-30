@@ -80,7 +80,7 @@ function write_eigenenergies(
     )
 end
 
-"""
+@doc raw"""
     dump_cc4s_files(
         active_space::OrbitalSpace,
         fitting::DensityFitting;
@@ -108,6 +108,13 @@ Requires a Gamma-only calculation with integer occupations.
 
 # Returns
 The list of written file paths.
+
+# Cost
+Dominated by the Delta integrals, see [`compute_delta_integrals`](@ref):
+- time: ``O(N_r N_\text{virt}^2 N_\text{occ}^2)``
+- memory: ``N_r (N_\text{virt}^2 + N_\text{occ}^2)`` complex numbers
+
+The files hold ``N^2 N_F`` complex numbers for the Coulomb vertex.
 """
 function dump_cc4s_files(
     active_space::OrbitalSpace,
@@ -154,16 +161,16 @@ function dump_cc4s_files(
 
     # --- dump DeltaIntegralsHH
     DeltaIntegralsHH = compute_delta_integrals(basis, hole_space.ψ, Val(:HH))
-    N_occ = size(DeltaIntegralsHH, 1)
+    Nocc = size(DeltaIntegralsHH, 1)
 
     # Row-major ordering for C++: i, j
     tensor_data_hh = (
         convert(Complex{Cdouble}, DeltaIntegralsHH[i, j])
-        for i in 1:N_occ for j in 1:N_occ
+        for i in 1:Nocc for j in 1:Nocc
     )
     dim_hh = [
-        Dict("length" => N_occ, "type" => "Hole"),
-        Dict("length" => N_occ, "type" => "Hole"),
+        Dict("length" => Nocc, "type" => "Hole"),
+        Dict("length" => Nocc, "type" => "Hole"),
     ]
     files_hh = write_cc4s_tensor(
         folder,
@@ -182,18 +189,18 @@ function dump_cc4s_files(
         hole_space.ψ,
         Val(:PPHH),
     )
-    N_virt = size(DeltaIntegralsPPHH, 1)
+    Nvirt = size(DeltaIntegralsPPHH, 1)
 
     # Row-major ordering for C++: a, b, i, j
     tensor_data_pphh = (
         convert(Complex{Cdouble}, DeltaIntegralsPPHH[a, b, i, j])
-        for a in 1:N_virt for b in 1:N_virt for i in 1:N_occ for j in 1:N_occ
+        for a in 1:Nvirt for b in 1:Nvirt for i in 1:Nocc for j in 1:Nocc
     )
     dim_pphh = [
-        Dict("length" => N_virt, "type" => "Particle"),
-        Dict("length" => N_virt, "type" => "Particle"),
-        Dict("length" => N_occ, "type" => "Hole"),
-        Dict("length" => N_occ, "type" => "Hole"),
+        Dict("length" => Nvirt, "type" => "Particle"),
+        Dict("length" => Nvirt, "type" => "Particle"),
+        Dict("length" => Nocc, "type" => "Hole"),
+        Dict("length" => Nocc, "type" => "Hole"),
     ]
     files_pphh = write_cc4s_tensor(
         folder,
@@ -224,17 +231,17 @@ function write_coulomb_vertex(
     ΓnmF::AbstractArray{T,5};
     force=true,
 ) where {T}
-    n_kpt = size(ΓnmF, 1)
-    n_bands = size(ΓnmF, 2)
-    n_aux_field = size(ΓnmF, 5)
-    @assert n_kpt == size(ΓnmF, 3)
-    @assert n_bands == size(ΓnmF, 4)
-    @assert n_kpt == 1  # 1 kpt is hard-coded for now (see write_eigenenergies)
+    Nk = size(ΓnmF, 1)
+    N = size(ΓnmF, 2)
+    NF = size(ΓnmF, 5)
+    @assert Nk == size(ΓnmF, 3)
+    @assert N == size(ΓnmF, 4)
+    @assert Nk == 1  # 1 kpt is hard-coded for now (see write_eigenenergies)
 
     dimensions = [
-        Dict("length" => n_aux_field, "type" => "AuxiliaryField"),
-        Dict("length" => n_kpt * n_bands, "type" => "State"),
-        Dict("length" => n_kpt * n_bands, "type" => "State"),
+        Dict("length" => NF, "type" => "AuxiliaryField"),
+        Dict("length" => Nk * N, "type" => "State"),
+        Dict("length" => Nk * N, "type" => "State"),
     ]
     metaData = Dict("halfGrid" => 0)  # Complex integrals
 
@@ -243,7 +250,7 @@ function write_coulomb_vertex(
     # ΓnmF in a stream using chunks of all field Fs for given (n,m)
     tensor_data = (
         convert(Vector{Complex{Cdouble}}, vec(ΓnmF[1, n, 1, m, :]))
-        for n in 1:n_bands for m in 1:n_bands
+        for n in 1:N for m in 1:N
     )
 
     return write_cc4s_tensor(
@@ -324,17 +331,17 @@ function write_singular_vectors(
     coulomb_vertex_singular_vectors::AbstractMatrix{T};
     force=false,
 ) where {T}
-    # coulomb_vertex_singular_vectors has dimensions (N_G, N_F)
-    N_G, N_F = size(coulomb_vertex_singular_vectors)
+    # coulomb_vertex_singular_vectors has dimensions (NG, NF)
+    NG, NF = size(coulomb_vertex_singular_vectors)
     dimensions = [
-        Dict("length" => N_F, "type" => "AuxiliaryField"),
-        Dict("length" => N_G, "type" => "Momentum"),
+        Dict("length" => NF, "type" => "AuxiliaryField"),
+        Dict("length" => NG, "type" => "Momentum"),
     ]
 
     # row-major write: loop over F then G
     tensor_data = (
         convert(Complex{Cdouble}, coulomb_vertex_singular_vectors[iG, iF])
-        for iF in 1:N_F for iG in 1:N_G
+        for iF in 1:NF for iG in 1:NG
     )
 
     return write_cc4s_tensor(

@@ -13,6 +13,7 @@ The code design is described in `CONTRIBUTING.md`.
     * **Public API:** every exported name needs a docstring (`docs/make.jl` builds with `checkdocs = :exports` and fails otherwise).
     * **Internals:** extension points (e.g. `_eigenproblems`, `_solve`, `_compress_coulomb_vertex`) and non-trivial internal types (e.g. `LevelShiftedOperator`) get a docstring too. Small helpers get at most a comment.
     * When one docstring covers several methods (e.g. a convenience form), its argument list must explain every signature.
+    * **Cost:** every public function and extension point whose time or memory grows faster than linearly with the system size (number of orbitals or plane waves, FFT log factors aside) has a `# Cost` section at the end of its docstring with the leading time terms and the peak memory. Update it whenever the scaling changes. Format and symbols: see "Computational cost" in `CONTRIBUTING.md`.
     * Write formulas in LaTeX: ```` ```math ```` blocks for displayed equations and double backticks (``` ``x`` ```) for inline math. Use `@doc raw"""` for docstrings with LaTeX, so backslashes need no escaping.
   * Use inline comments ONLY to explain physics/math reasoning, subtle normalizations, or workarounds. Never restate what the code mechanically does.
 
@@ -27,6 +28,7 @@ The exact same code path must run on both CPU and GPU.
 
 ## Style & Conventions
 Follow [Julia Blue Style](https://github.com/invenia/BlueStyle). Line length: ~92 characters.
+Counts that have a symbol in the "Computational cost" table of `CONTRIBUTING.md` are named after it without the subscript underscore (``N_G`` ↔ `NG`, ``N_\text{occ}`` ↔ `Nocc`); other counts are snake_case.
 
 
 ## Testing & Quality Assurance

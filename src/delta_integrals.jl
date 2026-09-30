@@ -1,8 +1,8 @@
 function _ifft_matrix(basis, kpt, ψ_mat)
-    N_grid = prod(basis.fft_size)
-    N_bands = size(ψ_mat, 2)
-    ψ_real_flat = zeros(ComplexF64, N_grid, N_bands)
-    for i in 1:N_bands
+    Nr = prod(basis.fft_size)
+    N = size(ψ_mat, 2)
+    ψ_real_flat = zeros(ComplexF64, Nr, N)
+    for i in 1:N
         ψ_real_flat[:, i] = vec(DFTK.ifft(basis, kpt, ψ_mat[:, i]))
     end
     return ψ_real_flat
@@ -23,6 +23,11 @@ real-space grid:
 ```
 For perfectly orthonormal orbitals and an infinitely dense grid, this evaluates to the
 Kronecker delta ``\delta_{ij}``. The grid-based numerical representation is returned.
+
+# Cost
+With ``N_\text{occ}`` hole orbitals:
+- time: ``O(N_\text{occ} N_r \log N_r + N_r N_\text{occ}^2)``
+- memory: ``N_r N_\text{occ}`` complex numbers for the orbitals on the grid
 """
 function compute_delta_integrals(basis, ψ_holes, ::Val{:HH})
     # Transform holes to real space and flatten spatial dimensions
@@ -49,15 +54,22 @@ and two hole orbitals:
 ```
 These quantities naturally emerge when decomposing two-electron Coulomb integrals using
 resolution of the identity or real-space vertex tensors. The returned tensor has the
-dimensions `(N_particles, N_particles, N_holes, N_holes)`.
+dimensions `(Nvirt, Nvirt, Nocc, Nocc)`.
+
+# Cost
+With ``N_\text{virt}`` particle and ``N_\text{occ}`` hole orbitals:
+- time: ``O(N_r N_\text{virt}^2 N_\text{occ}^2)`` for the contraction of the orbital pairs
+- memory: ``N_r (N_\text{virt}^2 + N_\text{occ}^2)`` complex numbers for the orbital pairs
+  on the grid. This is the practical limit, e.g. 500 virtual orbitals on a ``36^3`` grid
+  need about 190 GB.
 """
 function compute_delta_integrals(basis, ψ_particles, ψ_holes, ::Val{:PPHH})
     ψ_holes_real_flat = _ifft_matrix(basis, basis.kpoints[1], ψ_holes[1])
     ψ_particles_real_flat = _ifft_matrix(basis, basis.kpoints[1], ψ_particles[1])
 
-    N_grid = prod(basis.fft_size)
-    N_holes = size(ψ_holes[1], 2)
-    N_particles = size(ψ_particles[1], 2)
+    Nr = prod(basis.fft_size)
+    Nocc = size(ψ_holes[1], 2)
+    Nvirt = size(ψ_particles[1], 2)
 
     # We want DeltaIntegrals_abij = sum_r ψ_a^*(r) ψ_b^*(r) ψ_i(r) ψ_j(r) * dvol
     # For efficiency with BLAS, we form pairs:
@@ -65,24 +77,24 @@ function compute_delta_integrals(basis, ψ_particles, ψ_holes, ::Val{:PPHH})
     # O[r, (i,j)] = ψ_i(r) * ψ_j(r)
     # Then V' * O does the complex conjugate on V!
 
-    V_pairs = zeros(ComplexF64, N_grid, N_particles * N_particles)
+    V_pairs = zeros(ComplexF64, Nr, Nvirt * Nvirt)
     idx = 1
-    for b in 1:N_particles, a in 1:N_particles
+    for b in 1:Nvirt, a in 1:Nvirt
         @. V_pairs[:, idx] = ψ_particles_real_flat[:, a] * ψ_particles_real_flat[:, b]
         idx += 1
     end
 
-    O_pairs = zeros(ComplexF64, N_grid, N_holes * N_holes)
+    O_pairs = zeros(ComplexF64, Nr, Nocc * Nocc)
     idx = 1
-    for j in 1:N_holes, i in 1:N_holes
+    for j in 1:Nocc, i in 1:Nocc
         @. O_pairs[:, idx] = ψ_holes_real_flat[:, i] * ψ_holes_real_flat[:, j]
         idx += 1
     end
 
     # DeltaIntegrals_abij = (V_pairs' * O_pairs) * dvol
-    # Size: (N_particles * N_particles, N_holes * N_holes)
+    # Size: (Nvirt * Nvirt, Nocc * Nocc)
     DeltaIntegralsPPHH = (V_pairs' * O_pairs) .* basis.dvol
 
-    # Reshape to 4D tensor (N_particles, N_particles, N_holes, N_holes)
-    return reshape(DeltaIntegralsPPHH, N_particles, N_particles, N_holes, N_holes)
+    # Reshape to 4D tensor (Nvirt, Nvirt, Nocc, Nocc)
+    return reshape(DeltaIntegralsPPHH, Nvirt, Nvirt, Nocc, Nocc)
 end

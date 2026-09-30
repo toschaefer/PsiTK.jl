@@ -31,8 +31,14 @@ i.e. the coefficients of ``\psi_m^∗ \psi_n`` in the orthonormal plane waves
 
 # Returns
 A tuple `(ρmnG, G_vectors)`:
-- `ρmnG`: the overlap densities as a tensor of shape `(nk, n_bra, nk, n_ket, nG)`.
+- `ρmnG`: the overlap densities as a tensor of shape `(Nk, Nbra, Nk, Nket, NG)`.
 - `G_vectors`: the corresponding plane-wave vectors.
+
+# Cost
+Γ point, with ``N_\text{bra}``, ``N_\text{ket}`` the number of orbitals in `ψ_bra`, `ψ_ket`:
+- time: ``O(N_\text{bra} N_\text{ket} N_r \log N_r)``, two FFTs per orbital pair (half as
+  many pairs for `ψ_bra === ψ_ket`)
+- memory: ``N_\text{bra} N_\text{ket} N_G`` complex numbers for `ρmnG`
 """
 function compute_overlap_densities(
     basis,
@@ -122,7 +128,12 @@ for all orbitals in `ψ_bra` and `ψ_ket`. To restrict the orbitals, pass a subs
 
 # Returns
 A [`DensityFitting`](@ref) holding the uncompressed vertex `Γ` (shape
-`(nk, n_bra, nk, n_ket, nG)`), its `G_vectors` and the `kernel_fourier`.
+`(Nk, Nbra, Nk, Nket, NG)`), its `G_vectors` and the `kernel_fourier`.
+
+# Cost
+Those of [`compute_overlap_densities`](@ref), which the vertex overwrites in place:
+- time: ``O(N_\text{bra} N_\text{ket} N_r \log N_r)``
+- memory: ``N_\text{bra} N_\text{ket} N_G`` complex numbers for `Γ`
 """
 function compute_coulomb_vertex(
     basis,
@@ -169,9 +180,9 @@ function _compute_overlap_densities(
     G_indices=eachindex(G_vectors(basis)),
     callback=identity,
 ) where {T}
-    n_kpt = length(basis.kpoints)
-    n_bands_bra = size(ψ_bra[1], 2)
-    n_bands_ket = size(ψ_ket[1], 2)
+    Nk = length(basis.kpoints)
+    Nbra = size(ψ_bra[1], 2)
+    Nket = size(ψ_ket[1], 2)
 
     # === Create index to map each stored G to -G on the full FFT cube ===
     Gs = G_vectors(basis)
@@ -179,14 +190,14 @@ function _compute_overlap_densities(
     idx_minus_G = [G_to_idx[-Gs[i]] for i in G_indices]
 
     # allocate overlap densities
-    ρmnG = zeros(complex(T), n_kpt, n_bands_bra, n_kpt, n_bands_ket, length(G_indices))
+    ρmnG = zeros(complex(T), Nk, Nbra, Nk, Nket, length(G_indices))
 
     is_symmetric = (ψ_bra === ψ_ket)
     if is_symmetric
         # only upper triangle of ρmnG
-        total_steps = (n_bands_bra * (n_bands_bra + 1) ÷ 2) * n_kpt^2
+        total_steps = (Nbra * (Nbra + 1) ÷ 2) * Nk^2
     else
-        total_steps = n_bands_bra * n_bands_ket * n_kpt^2
+        total_steps = Nbra * Nket * Nk^2
     end
     step = 0
 
@@ -197,12 +208,12 @@ function _compute_overlap_densities(
     # end
 
     # === Calculate overlap densities ρmnG ===
-    @views for (ikn, kptn) in enumerate(basis.kpoints), n in 1:n_bands_ket
+    @views for (ikn, kptn) in enumerate(basis.kpoints), n in 1:Nket
         # Prepare ψnk(r)
         ψnk_real = ifft(basis, kptn, ψ_ket[ikn][:, n])
 
         for (ikm, kptm) in enumerate(basis.kpoints)
-            for m in 1:n_bands_bra
+            for m in 1:Nbra
                 # Compute upper triangle only (m <= n) if spaces are symmetric
                 # The lower triangle is filled via Hermitian conjugation below.
                 if is_symmetric && m > n
@@ -242,7 +253,7 @@ Density-fitting (resolution-of-identity) factorization of the electron repulsion
 i.e. the Coulomb vertex ``Γ`` together with the auxiliary basis ``F`` it is expressed in.
 
 # Fields
-- `Γ`: the Coulomb vertex tensor of shape `(nk, n_bands, nk, n_bands, NF)`. The auxiliary
+- `Γ`: the Coulomb vertex tensor of shape `(Nk, Nbra, Nk, Nket, NF)`. The auxiliary
   index runs over the plane waves `G_vectors` (uncompressed) or over the compressed index
 - `G_vectors`: the plane waves of the uncompressed vertex
 - `kernel_fourier`: the interaction kernel evaluated at `G_vectors`
@@ -281,8 +292,11 @@ Gramian ``\Gamma^\dagger \Gamma``. How ``U`` is determined depends on `strategy`
 - `strategy`: the compression strategy, carrying its own threshold
 
 # Returns
-A [`DensityFitting`](@ref) with the compressed `Γ` of shape `(nk, n_bands, nk, n_bands, NF)`
+A [`DensityFitting`](@ref) with the compressed `Γ` of shape `(Nk, Nbra, Nk, Nket, NF)`
 and the accumulated `singular_vectors` of shape `(NG, NF)`.
+
+# Cost
+Those of `strategy`, see [`CoulombGramian`](@ref) and [`AdaptiveRandomizedSVD`](@ref).
 """
 function compress_coulomb_vertex(fitting::DensityFitting, strategy)
     ΓmnF, U = _compress_coulomb_vertex(fitting.Γ, strategy)
@@ -295,9 +309,9 @@ end
     _compress_coulomb_vertex(Γ, strategy) -> (Γ_F, U)
 
 Extension point for the compression strategies of [`compress_coulomb_vertex`](@ref):
-compress the vertex `Γ` of shape `(nk, n_bands, nk, n_bands, NG)` along its auxiliary axis
-to `Γ_F = Γ U` of shape `(nk, n_bands, nk, n_bands, NF)`, with the transformation `U` of
-shape `(NG, NF)`.
+compress the vertex `Γ` of shape `(Nk, Nbra, Nk, Nket, NG)` along its auxiliary axis
+to `Γ_F = Γ U` of shape `(Nk, Nbra, Nk, Nket, NF)`, with the transformation `U` of
+shape `(NG, NF)`. Each strategy documents its cost in its docstring.
 """
 function _compress_coulomb_vertex end
 
@@ -311,6 +325,13 @@ H = - \Gamma^\dagger \Gamma = U \Lambda U^\dagger
 ```
 The compressed ``\Gamma`` is then obtained via ``\Gamma_\text{compressed} = \Gamma U``,
 where the columns of ``U`` are restricted such that ``|\lambda|`` exceeds `thresh`.
+
+# Cost
+With ``N_{pp} = N_k^2 N_\text{bra} N_\text{ket}`` orbital pairs of the vertex:
+- time: ``O(N_{pp} N_G^2)`` for the Gramian, ``O(N_G^3)`` for its diagonalization and
+  ``O(N_{pp} N_G N_F)`` for the rotation
+- memory: ``O(N_G^2)`` complex numbers for the Gramian and its eigenvectors, plus
+  ``N_{pp} N_F`` for the compressed vertex
 """
 Base.@kwdef struct CoulombGramian
     thresh::Float64 = 1e-6
@@ -364,6 +385,14 @@ is smaller than ``\sqrt{\text{thresh}}/2``. With ``r`` test vectors this estimat
 the true projection error with probability ``1 - 10^{-r}``
 [Halko, Martinsson, Tropp, SIAM Rev. **53**, 217 (2011), Lemma 4.1]; a single test vector
 would stop the finder too early in a small fraction of runs.
+
+# Cost
+With ``N_{pp} = N_k^2 N_\text{bra} N_\text{ket}`` orbital pairs of the vertex and ``N_F``
+the dimension of the range found (at least ``2\sqrt{N_{pp}}``, before truncation):
+- time: ``O(N_{pp} N_G N_F)`` for the projections of the vertex, plus
+  ``O(N_G N_F^2)`` for the orthogonalization of ``Q``
+- memory: ``O(N_{pp} N_F)`` complex numbers for the projected vertex and the random
+  blocks, plus ``N_G N_F`` for ``Q``
 
 TODO: The entire algorithm could be improved by techniques proposed in the following paper:
 Fast and accurate randomized algorithms for low-rank tensor decompositions, L. Ma,

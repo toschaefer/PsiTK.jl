@@ -1,8 +1,8 @@
 function construct_stochastic_orbitals(N, kpt, orbitalType)
-    NG = length(kpt.G_vectors)
-    radius = rand(NG, N)
-    phase = cis.(2π .* rand(NG, N))
-    ϕk = zeros(orbitalType, NG, N)
+    Npw = length(kpt.G_vectors)
+    radius = rand(Npw, N)
+    phase = cis.(2π .* rand(Npw, N))
+    ϕk = zeros(orbitalType, Npw, N)
     ϕk .= radius .* phase
     for a in 1:N
         ϕk[:, a] ./= norm(ϕk[:, a])
@@ -28,17 +28,28 @@ respectively.
 The generated orbitals are NOT orthonormal (they are ``h``-orthonormal), and their
 `eigenvalues` are the generalized Rayleigh quotients ``\lambda_i``, not orbital energies.
 Use [`canonicalize_orbitals`](@ref) to obtain orthonormal orbitals with Fock energies.
+
+# Cost
+Per operator application to one vector, on top of the solver's cost:
+- ``\mathcal K``: ``O(N_\text{occ} N_r \log N_r)``, two FFTs per occupied orbital
+- ``h``: ``O(N_r \log N_r + N_\text{pw} N_\text{occ})`` with the ACE exchange of
+  `scfres.ham`
 """
 Base.@kwdef struct DensitySpecificVirtuals
     n_orbitals::Int
 end
 
-"""
+@doc raw"""
     CanonicalVirtuals(; n_orbitals=:all)
 
 Target for [`generate_orbitals`](@ref): canonical virtual orbitals, i.e. the lowest
 eigenpairs of the Fock Hamiltonian in the virtual space. `n_orbitals=:all` yields the
 complete virtual plane-wave space.
+
+# Cost
+Per operator application to one vector, on top of the solver's cost:
+``O(N_r \log N_r + N_\text{pw} N_\text{occ})`` for the Fock operator with the ACE exchange
+of `scfres.ham`.
 """
 Base.@kwdef struct CanonicalVirtuals
     n_orbitals::Union{Int,Symbol} = :all
@@ -53,6 +64,10 @@ interaction with the occupied space, i.e. the lowest (most negative) eigenpairs 
 \mathcal K \varphi  =  \lambda \varphi
 ```
 where ``\mathcal K`` is the Fock exchange operator.
+
+# Cost
+Per operator application to one vector, on top of the solver's cost:
+``O(N_\text{occ} N_r \log N_r)`` for ``\mathcal K``, two FFTs per occupied orbital.
 """
 Base.@kwdef struct MaximalExchangeVirtuals
     n_orbitals::Int
@@ -74,7 +89,8 @@ Extension point for virtual-orbital targets: the eigenvalue problem that defines
 virtual orbitals of `target`, as a vector over k-points of `(; A, B, ε_offset)`. The lowest
 eigenpairs of `A φ = λ B φ` (`B = I` for a standard eigenvalue problem) are the wanted
 orbitals with eigenvalues `λ + ε_offset`. The eigenvalue problem is solved by
-[`_solve`](@ref), so targets and eigensolvers combine freely.
+[`_solve`](@ref), so targets and eigensolvers combine freely. Each target documents the
+cost of one application of its operators in its docstring.
 """
 function _eigenproblems end
 
@@ -123,8 +139,8 @@ function _eigenproblems(::MaximalExchangeVirtuals, occ_space, ham)
     end
 end
 
-function _n_orbitals(target::VirtualOrbitalTarget, n_G, n_occ)
-    target.n_orbitals === :all && return n_G - n_occ
+function _n_orbitals(target::VirtualOrbitalTarget, Npw, Nocc)
+    target.n_orbitals === :all && return Npw - Nocc
     return target.n_orbitals
 end
 
@@ -147,7 +163,7 @@ end
 
 # --- Generator ---
 
-"""
+@doc raw"""
     generate_orbitals(target, occ_space::OrbitalSpace, ham; solver=LOBPCG())
 
 Generate virtual orbitals orthogonal to the occupied space `occ_space` by solving the
@@ -164,6 +180,11 @@ eigenvalue problem defined by `target` with the eigensolver `solver`.
 
 # Returns
 An `OrbitalSpace` with `target.n_orbitals` orbitals per k-point.
+
+# Cost
+Per k-point, with ``N_\text{virt}`` = `target.n_orbitals`: that of `solver` (see its
+docstring), with the operator applications of `target` (see its docstring), plus
+``O(N_\text{pw} N_\text{virt}^2)`` time for the initial guess.
 """
 function generate_orbitals(
     target::VirtualOrbitalTarget,
@@ -180,11 +201,11 @@ function generate_orbitals(
 
     for (ik, kpt) in enumerate(basis.kpoints)
         ψocck = occ_space.ψ[ik]
-        Nfull = length(kpt.G_vectors)
-        n_orbitals = _n_orbitals(target, Nfull, size(ψocck, 2))
+        Npw = length(kpt.G_vectors)
+        n_orbitals = _n_orbitals(target, Npw, size(ψocck, 2))
 
-        if solver isa LOBPCG && n_orbitals > 0.1 * Nfull
-            @warn "n_orbitals ($n_orbitals) is > 10% of plane waves ($Nfull). " *
+        if solver isa LOBPCG && n_orbitals > 0.1 * Npw
+            @warn "n_orbitals ($n_orbitals) is > 10% of plane waves ($Npw). " *
                   "FullDiagonalization() might be faster."
         end
 
