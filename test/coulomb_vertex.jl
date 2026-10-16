@@ -1,4 +1,5 @@
 @testitem "Coulomb Vertex Computation" setup=[TestSystems] tags=[:coulomb_vertex] begin
+    using DFTK
     using LinearAlgebra
 
     scfres = TestSystems.setup_water_hf(n_bands_converge=8)
@@ -8,7 +9,10 @@
     space = select_orbitals(OrbitalSpace(scfres), 1:N)
     basis = space.basis
 
-    fitting = compute_coulomb_vertex(space)
+    # The vertex depends on the interaction kernel, so it has no default
+    @test_throws UndefKeywordError compute_coulomb_vertex(space)
+    kernel = only(t.kernel for t in basis.model.term_types if t isa ExactExchange)
+    fitting = compute_coulomb_vertex(space; interaction_kernel=kernel)
     (; Γ, G_vectors, kernel_fourier) = fitting
     @test isnothing(fitting.singular_vectors)
 
@@ -53,7 +57,7 @@
 
     # The (basis, ψ) forms agree with the OrbitalSpace shorthands; the bra ≠ ket path
     # (no symmetry shortcut) reproduces the symmetric result
-    @test compute_coulomb_vertex(basis, space.ψ).Γ ≈ Γ
+    @test compute_coulomb_vertex(basis, space.ψ; interaction_kernel=kernel).Γ ≈ Γ
     ψ_copy = deepcopy(space.ψ)
     ρ_bk, G_bk = compute_overlap_densities(basis, space.ψ, ψ_copy; Ecut_ratio=2/3)
     @test G_bk == G_vectors && ρ_bk ≈ ρmnG

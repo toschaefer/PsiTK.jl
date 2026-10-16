@@ -77,14 +77,30 @@ function merge_spaces(
     )
 end
 
+# Every exact-exchange term must act through the uncompressed operator: a compressed one
+# (ACE) is exact only on the span of the orbitals it was sketched with, so it is wrong on
+# virtual orbitals
+function _check_uncompressed_exchange(ham)
+    any(t -> t isa DFTK.TermExactExchange, ham.basis.terms) || return nothing
+    for block in ham.blocks
+        any(op -> op isa DFTK.ExchangeOperator, block.operators) && continue
+        error("The exchange operator of the Hamiltonian is compressed (e.g. ACE). " *
+              "Rebuild it with `exxalg=VanillaExx()`, e.g. use `scfres.ham`.")
+    end
+    return nothing
+end
+
 @doc raw"""
     canonicalize_orbitals(space::OrbitalSpace, hamiltonian; occupation_tol=1e-4)
 
-Diagonalizes the Fock Hamiltonian in the subspace defined by `space.ψ` to return
-canonicalized, orthonormal eigenstates sorted by energy. The occupations of `space` are
-redistributed by the aufbau principle: the largest occupations are assigned to the lowest
-eigenvalues. The Fermi level `εF` is placed in the middle of the gap between occupied and
-empty orbitals (kept as is if there is no gap).
+Diagonalizes the mean-field Hamiltonian `hamiltonian` (e.g. `scfres.ham`) in the subspace
+defined by `space.ψ` to return canonicalized, orthonormal eigenstates sorted by energy.
+Its exchange operator, if any, must be uncompressed: an ACE exchange (`exxalg=AceExx()`)
+is exact only on the orbitals it was sketched with and is rejected with an error.
+
+The occupations of `space` are redistributed by the aufbau principle: the largest
+occupations are assigned to the lowest eigenvalues. The Fermi level `εF` is placed in the
+middle of the gap between occupied and empty orbitals (kept as is if there is no gap).
 
 The aufbau occupation reproduces the input one only if the diagonalization does not mix
 orbitals of different occupation, e.g. for a converged SCF canonicalized with its own
@@ -100,10 +116,11 @@ times the orbital energy gap. The default thus flags changes beyond those left b
 converged to about ``10^{-9}`` Hartree in the total energy.
 
 # Cost
-Per k-point, with ``N`` orbitals in `space`:
-- time: ``N`` applications of `hamiltonian` (``O(N_r \log N_r + N_\text{pw} N_\text{occ})``
-  each with ACE exchange), plus ``O(N_\text{pw} N^2 + N^3)`` for the subspace matrices,
-  their diagonalization and the rotation
+Per k-point, with ``N`` orbitals in `space` and ``N_\text{occ}`` occupied orbitals in the
+exchange operator of `hamiltonian`:
+- time: ``N`` applications of `hamiltonian`, ``O(N_k N_\text{occ} N_r \log N_r)`` each
+  with exact exchange (``O(N_r \log N_r)`` without), plus ``O(N_\text{pw} N^2 + N^3)``
+  for the subspace matrices, their diagonalization and the rotation
 - memory: ``O(N_\text{pw} N)`` complex numbers for the orbitals and their images
 """
 function canonicalize_orbitals(
@@ -111,6 +128,7 @@ function canonicalize_orbitals(
     hamiltonian;
     occupation_tol=1e-4,
 ) where {B,T,R}
+    _check_uncompressed_exchange(hamiltonian)
     ψ_canon = Matrix{T}[]
     eigenvalues_canon = Vector{R}[]
     occupation_canon = Vector{R}[]

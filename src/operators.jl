@@ -1,87 +1,39 @@
 @doc raw"""
-    LevelShiftedOperator(base_op, V, ε_homo, safe_shift, penalty)
-
-A wrapper that applies a constant energy shift and a strong penalty to a projected subspace.
-Applied to a vector ``X``, it computes
-```math
-(A - ε_\text{homo} + s) X + p \, V V^\dagger X
-```
-with ``A`` = `base_op`, ``ε_\text{homo}`` = `ε_homo`, ``s`` = `safe_shift` and
-``p`` = `penalty`. This shifts the entire spectrum by ``s - ε_\text{homo}``, while
-artificially pushing the eigenvalues of the subspace spanned by ``V`` up by ``p``.
-Useful for isolating virtual manifolds or forcing iterative eigensolvers away from an
-occupied subspace.
-"""
-struct LevelShiftedOperator{TH,TV}
-    base_op::TH                      # the base operator
-    V::TV                            # basis for penalty projector
-    ε_homo::Float64                  # reference energy level
-    safe_shift::Float64              # shift to avoid zero/negative eigenvalues
-    penalty::Float64                 # penalty energy for the subspace
-end
-
-function LevelShiftedOperator(base_op, V, ε_homo, safe_shift, penalty)
-    return LevelShiftedOperator{typeof(base_op),typeof(V)}(
-        base_op,
-        V,
-        ε_homo,
-        safe_shift,
-        penalty,
-    )
-end
-
-function LinearAlgebra.mul!(Y, op::LevelShiftedOperator, X)
-    mul!(Y, op.base_op, X)
-    Y .+= (-op.ε_homo + op.safe_shift) .* X
-
-    # Projector penalty
-    coeffs = op.V' * X
-    mul!(Y, op.V, coeffs, op.penalty, 1.0)
-    return Y
-end
-
-function Base.:*(op::LevelShiftedOperator, X::AbstractMatrix)
-    Y = similar(X)
-    mul!(Y, op, X)
-    return Y
-end
-
-Base.size(op::LevelShiftedOperator, args...) = size(op.base_op, args...)
-Base.eltype(op::LevelShiftedOperator) = eltype(op.base_op)
-LinearAlgebra.ishermitian(op::LevelShiftedOperator) = ishermitian(op.base_op)
-
-@doc raw"""
-    ProjectedShiftedOperator(base_op, V, shift)
+    ProjectedShiftedOperator(base_op, V, shift, penalty)
 
 A wrapper that projects the operator into the orthogonal complement of the subspace
-spanned by ``V``, while applying a constant energy `shift` directly to the components in
-that subspace. Applied to a vector ``X``, it computes
+spanned by the orthonormal columns of ``V``, shifts it there by a constant, and assigns a
+penalty energy to the subspace itself. Applied to a vector ``X``, it computes
 ```math
-(1 - V V^\dagger) \, A \, (1 - V V^\dagger) X + σ \, V V^\dagger X
+(1 - V V^\dagger) (A + σ) (1 - V V^\dagger) X + p \, V V^\dagger X
 ```
-with ``A`` = `base_op` and ``σ`` = `shift`. This ensures that the eigensolver remains
-within the orthogonal complement of ``V``, by penalizing any components inside it with the
-positive energy ``σ``.
+with ``A`` = `base_op`, ``σ`` = `shift` and ``p`` = `penalty`. The subspace of ``V`` is an
+exact eigenspace with eigenvalue ``p``, even if it is not an invariant subspace of ``A``
+(e.g. orbitals of a loosely converged SCF), so the eigenvectors in the complement are
+exactly orthogonal to ``V``. A penalty above the wanted part of the spectrum keeps
+eigensolvers away from the subspace.
 """
 struct ProjectedShiftedOperator{TOp,TV}
     base_op::TOp       # the base operator
-    V::TV              # basis for projector
-    shift::Float64     # energy penalty shift for the projected subspace
+    V::TV              # basis of the projected-out subspace
+    shift::Float64     # energy shift in the orthogonal complement
+    penalty::Float64   # eigenvalue of the projected-out subspace
 end
 
-function ProjectedShiftedOperator(base_op, V, shift)
-    return ProjectedShiftedOperator{typeof(base_op),typeof(V)}(base_op, V, shift)
+function ProjectedShiftedOperator(base_op, V, shift, penalty)
+    return ProjectedShiftedOperator{typeof(base_op),typeof(V)}(base_op, V, shift, penalty)
 end
 
 function LinearAlgebra.mul!(Y, op::ProjectedShiftedOperator, X)
     workX = similar(X)
     copy!(workX, X)
     coeffs_in = op.V' * X
-    mul!(workX, op.V, coeffs_in, -1.0, 1.0) # workX -= op.V * coeffs_in
-    mul!(Y, op.base_op, workX)              #     Y  = op.base_op * workX
+    mul!(workX, op.V, coeffs_in, -1.0, 1.0)   # workX -= op.V * coeffs_in
+    mul!(Y, op.base_op, workX)                #     Y  = op.base_op * workX
+    Y .+= op.shift .* workX
     coeffs_out = op.V' * Y
-    mul!(Y, op.V, coeffs_out, -1.0, 1.0)    #     Y -= op.V * coeffs_out
-    mul!(Y, op.V, coeffs_in, op.shift, 1.0) #     Y += shift*coeffs_in
+    mul!(Y, op.V, coeffs_out, -1.0, 1.0)      #     Y -= op.V * coeffs_out
+    mul!(Y, op.V, coeffs_in, op.penalty, 1.0) #     Y += penalty*coeffs_in
     return Y
 end
 

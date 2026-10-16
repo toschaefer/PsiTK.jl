@@ -51,8 +51,14 @@ scfres = self_consistent_field(basis; exxalg=DFTK.AceExx())
 # Occupied HF orbitals as the starting point
 occ_space, _ = split_occupied_virtual(OrbitalSpace(scfres))
 
-# Generate Density Specific Virtuals with PsiTK
-dsv_space = generate_orbitals(DensitySpecificVirtuals(n_orbitals=50), occ_space, scfres.ham)
+# The interaction kernel of the HF exchange, used for the virtual orbitals and the Coulomb
+# vertex below. PsiTK has no default kernel, since the results depend on it
+kernel = only(t.kernel for t in scfres.basis.model.term_types if t isa ExactExchange)
+
+# Generate Density Specific Virtuals with PsiTK. scfres.ham has the uncompressed exchange
+# operator (ACE is used during the SCF only), as PsiTK requires
+target = DensitySpecificVirtuals(n_orbitals=50, interaction_kernel=kernel)
+dsv_space = generate_orbitals(target, occ_space, scfres.ham)
 
 # DSVs are not orthonormal and carry no Fock energies: canonicalize the active space
 # (diagonalize the Fock operator in the merged subspace) before it can be used
@@ -60,7 +66,8 @@ active_space = canonicalize_orbitals(merge_spaces(occ_space, dsv_space), scfres.
 
 # Density fitting of the electron repulsion integrals: Coulomb vertex in the plane-wave
 # basis, compressed to a small auxiliary basis, and dumped for Cc4s
-fitting = compute_coulomb_vertex(active_space; callback=ShowProgress())
+fitting = compute_coulomb_vertex(active_space; interaction_kernel=kernel,
+                                 callback=ShowProgress())
 fitting = compress_coulomb_vertex(fitting, CoulombGramian())
 dump_cc4s_files(active_space, fitting; folder="cc4s_data")
 ```

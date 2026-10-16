@@ -6,6 +6,7 @@
     scfres = TestSystems.setup_h_chain_hf(; Ecut=15)
     basis = scfres.basis
     ham = scfres.ham
+    kernel = only(t.kernel for t in basis.model.term_types if t isa ExactExchange)
     occ_space, _ = split_occupied_virtual(OrbitalSpace(scfres))
     Npw = length(basis.kpoints[1].G_vectors)
     Nocc = size(occ_space.ψ[1], 2)
@@ -54,7 +55,7 @@
     # ---------------------------------------------------------
     # 3. DensitySpecificVirtuals with both solvers
     # ---------------------------------------------------------
-    target = DensitySpecificVirtuals(n_orbitals=Nvirt)
+    target = DensitySpecificVirtuals(n_orbitals=Nvirt, interaction_kernel=kernel)
     virt_dsv = generate_orbitals(target, occ_space, ham; solver=solver_lobpcg)
 
     @test size(virt_dsv.ψ[1]) == (Npw, Nvirt)
@@ -116,7 +117,7 @@
     # ---------------------------------------------------------
     # 4. MaximalExchangeVirtuals: most negative exchange eigenvalues
     # ---------------------------------------------------------
-    target = MaximalExchangeVirtuals(n_orbitals=Nvirt)
+    target = MaximalExchangeVirtuals(n_orbitals=Nvirt, interaction_kernel=kernel)
     virt_mev = generate_orbitals(target, occ_space, ham; solver=FullDiagonalization())
     @test size(virt_mev.ψ[1]) == (Npw, Nvirt)
     @test virt_mev.ψ[1]' * virt_mev.ψ[1] ≈ I
@@ -125,4 +126,105 @@
     @test issorted(virt_mev.eigenvalues[1])
     virt_mev_lobpcg = generate_orbitals(target, occ_space, ham; solver=solver_lobpcg)
     @test isapprox(virt_mev_lobpcg.eigenvalues[1], virt_mev.eigenvalues[1], rtol=1e-3)
+end
+
+@testitem "Active Orbitals and ACE" setup=[TestSystems] tags=[:virtual_orbitals] begin
+    using PsiTK
+    using DFTK
+    using LinearAlgebra
+
+    scfres = TestSystems.setup_h_chain_hf(; Ecut=15)
+    basis = scfres.basis
+    ham = scfres.ham
+    kernel = only(t.kernel for t in basis.model.term_types if t isa ExactExchange)
+    occ_space, virt_scf = split_occupied_virtual(OrbitalSpace(scfres))
+    Nvirt = 6
+    solver = FullDiagonalization()
+
+    # An ACE exchange is exact only on its sketch orbitals and is rejected
+    ham_ace = DFTK.Hamiltonian(
+        basis;
+        ψ=scfres.ψ,
+        occupation=scfres.occupation,
+        ρ=scfres.ρ,
+        exxalg=DFTK.AceExx(),
+    )
+    targets = (
+        CanonicalVirtuals(n_orbitals=Nvirt),
+        DensitySpecificVirtuals(n_orbitals=Nvirt, interaction_kernel=kernel),
+    )
+    for target in targets
+        @test_throws ErrorException generate_orbitals(target, occ_space, ham_ace; solver)
+    end
+    @test_throws ErrorException canonicalize_orbitals(occ_space, ham_ace)
+
+    # Embedding: only the HOMO is active, the virtuals stay orthogonal to all occupied
+    # orbitals and the exchange operator is that of the active orbital only
+    active = select_orbitals(occ_space, [2])
+    term = DFTK.ExactExchange(; kernel)(basis)
+    _, K_act = DFTK.ene_ops(term, basis, active.ψ, active.occupation)
+
+    target = MaximalExchangeVirtuals(n_orbitals=Nvirt, interaction_kernel=kernel)
+    mev_all = generate_orbitals(target, occ_space, ham; solver)
+    mev_act = generate_orbitals(target, occ_space, ham; active, solver)
+    X = mev_act.ψ[1]
+    @test norm(occ_space.ψ[1]' * X) < 1e-6
+    K_X = X' * (K_act[1] * X)
+    @test norm(K_X - Diagonal(K_X)) < 1e-6
+    @test real(diag(K_X)) ≈ mev_act.eigenvalues[1]
+    @test !isapprox(mev_act.eigenvalues[1], mev_all.eigenvalues[1]; rtol=1e-3)
+
+    target = DensitySpecificVirtuals(n_orbitals=Nvirt, interaction_kernel=kernel)
+    dsv_all = generate_orbitals(target, occ_space, ham; solver)
+    dsv_act = generate_orbitals(target, occ_space, ham; active, solver)
+    @test norm(occ_space.ψ[1]' * dsv_act.ψ[1]) < 1e-6
+    @test !isapprox(dsv_act.eigenvalues[1], dsv_all.eigenvalues[1]; rtol=1e-3)
+
+    # Canonical virtuals depend on the reference only
+    target = CanonicalVirtuals(n_orbitals=Nvirt)
+    canon_all = generate_orbitals(target, occ_space, ham; solver)
+    canon_act = generate_orbitals(target, occ_space, ham; active, solver)
+    @test canon_act.eigenvalues[1] ≈ canon_all.eigenvalues[1]
+
+    # Active orbitals outside the occupied space are rejected
+    @test_throws ErrorException generate_orbitals(
+        DensitySpecificVirtuals(n_orbitals=Nvirt, interaction_kernel=kernel),
+        occ_space,
+        ham;
+        active=virt_scf,
+        solver,
+    )
+end
+
+@testitem "Orbitals from DFT" setup=[TestSystems] tags=[:virtual_orbitals] begin
+    using PsiTK
+    using DFTK
+    using LinearAlgebra
+
+    # A Kohn-Sham Hamiltonian has no exchange term: the exchange operator of the DSVs is
+    # built by PsiTK with the given kernel, and the Hamiltonian passes the exchange checks
+    scfres = TestSystems.setup_h_chain_pbe(; Ecut=15)
+    occ_space, _ = split_occupied_virtual(OrbitalSpace(scfres))
+    target = DensitySpecificVirtuals(n_orbitals=6, interaction_kernel=ProbeCharge())
+    dsv = generate_orbitals(target, occ_space, scfres.ham; solver=FullDiagonalization())
+    @test size(dsv.ψ[1], 2) == 6
+    @test norm(occ_space.ψ[1]' * dsv.ψ[1]) < 1e-6
+    @test all(dsv.eigenvalues[1] .< 0)
+
+    # The PBE fixture is converged to 1e-6 in energy only, so its occupied orbitals mix
+    # with the virtual ones at the 1e-4 level
+    active = canonicalize_orbitals(
+        merge_spaces(occ_space, dsv),
+        scfres.ham;
+        occupation_tol=1e-3,
+    )
+    @test active.ψ[1]' * active.ψ[1] ≈ I
+end
+
+@testitem "Required Kernel" tags=[:virtual_orbitals] begin
+    using PsiTK
+
+    # The orbitals depend on the interaction kernel, so it has no default
+    @test_throws UndefKeywordError DensitySpecificVirtuals(n_orbitals=4)
+    @test_throws UndefKeywordError MaximalExchangeVirtuals(n_orbitals=4)
 end

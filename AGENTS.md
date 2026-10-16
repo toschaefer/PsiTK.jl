@@ -11,7 +11,7 @@ The code design is described in `docs/src/developer.md`.
   * Keep functions short and trackable.
   * Write docstrings for the public API and for the internals a developer needs to extend or understand the code. `docs/src/code_reference.md` collects them automatically via `@autodocs` into "Public API" and "Developer Reference (Internals)", so never list functions there by hand.
     * **Public API:** every exported name needs a docstring (`docs/make.jl` builds with `checkdocs = :exports` and fails otherwise).
-    * **Internals:** extension points (e.g. `_eigenproblems`, `_solve`, `_compress_coulomb_vertex`) and non-trivial internal types (e.g. `LevelShiftedOperator`) get a docstring too. Small helpers get at most a comment.
+    * **Internals:** extension points (e.g. `_eigenproblems`, `_solve`, `_compress_coulomb_vertex`) and non-trivial internal types (e.g. `ProjectedShiftedOperator`) get a docstring too. Small helpers get at most a comment.
     * When one docstring covers several methods (e.g. a convenience form), its argument list must explain every signature.
     * **Cost:** every public function and extension point whose time or memory grows faster than linearly with the system size (number of orbitals or plane waves, FFT log factors aside) has a `# Cost` section at the end of its docstring with the leading time terms and the peak memory. Update it whenever the scaling changes. Format and symbols: see "Computational cost" in `docs/src/developer.md`.
     * Write formulas in LaTeX: ```` ```math ```` blocks for displayed equations and double backticks (``` ``x`` ```) for inline math. Use `@doc raw"""` for docstrings with LaTeX, so backslashes need no escaping.

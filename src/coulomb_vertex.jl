@@ -91,7 +91,7 @@ end
         basis,
         ψ_bra,
         ψ_ket;
-        interaction_kernel=DFTK.ProbeCharge(DFTK.BareCoulomb()),
+        interaction_kernel,
         Ecut_ratio=2/3,
         callback=identity
     )
@@ -119,8 +119,13 @@ for all orbitals in `ψ_bra` and `ψ_ket`. To restrict the orbitals, pass a subs
   ``Γ_{nm,-\bm G} = Γ_{mn \bm G}^∗`` (see [`compute_overlap_densities`](@ref))
 - `bra_space`, `ket_space`, `space`: [`OrbitalSpace`](@ref)s, a shorthand for passing
   their `basis` and `ψ`
-- `interaction_kernel`: the DFTK `InteractionKernel` (default: bare Coulomb with the
-  probe-charge singularity treatment, `ProbeCharge(BareCoulomb())`)
+- `interaction_kernel`: the DFTK `InteractionKernel` ``v``, required since the vertex
+  depends on it. To use the one of a Hartree-Fock or hybrid SCF, take it from the model
+  (the exact-exchange fraction of a hybrid is stored separately and not part of the
+  kernel), e.g.
+  `only(t.kernel for t in scfres.basis.model.term_types if t isa ExactExchange)`.
+  The evaluated kernel is stored in the result (`kernel_fourier`), so that the vertex and
+  the potential written by the interfaces always agree
 - `Ecut_ratio`: cutoff ratio for the vertex (default: 2/3), see
   [`compute_overlap_densities`](@ref)
 - `callback`: called after each orbital pair with `(; step, total_steps)`,
@@ -139,7 +144,7 @@ function compute_coulomb_vertex(
     basis,
     ψ_bra,
     ψ_ket;
-    interaction_kernel=DFTK.ProbeCharge(DFTK.BareCoulomb()),
+    interaction_kernel,
     Ecut_ratio=2/3,
     callback=identity,
 )

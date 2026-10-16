@@ -1,5 +1,6 @@
 @testmodule TestSystems begin
     export setup_water_hf, setup_diamond_hf, setup_he_solid_hf, setup_h_chain_hf
+    export setup_h_chain_pbe
 
     using DFTK
     using PseudoPotentialData
@@ -210,13 +211,9 @@
         return scfres_hf
     end
 
-    """
-        setup_h_chain_hf(; Ecut=15, n_bands_converge=nothing)
-
-    Sets up a Peierls distorted hydrogen chain with 4 atoms in the cell.
-    The y and z directions are slightly distorted to break symmetry.
-    """
-    function setup_h_chain_hf(; Ecut=15, n_bands_converge=nothing)
+    # Peierls distorted hydrogen chain with 4 atoms in the cell; the y and z directions are
+    # slightly distorted to break symmetry
+    function h_chain_system()
         L_x = 6.0
         lattice = [
             L_x 0 0;
@@ -234,12 +231,22 @@
             [0.5, 0.5, 0.5],
             [0.7, 0.5, 0.5],
         ]
+        return (; lattice, atoms, positions)
+    end
 
-        kwargs_nbands = if isnothing(n_bands_converge)
-            (;)
-        else
-            (; nbandsalg=FixedBands(; n_bands_converge))
-        end
+    function h_chain_kwargs_nbands(n_bands_converge)
+        isnothing(n_bands_converge) && return (;)
+        return (; nbandsalg=FixedBands(; n_bands_converge))
+    end
+
+    """
+        setup_h_chain_pbe(; Ecut=15, n_bands_converge=nothing)
+
+    Sets up a Peierls distorted hydrogen chain with 4 atoms in the cell and performs a PBE
+    calculation without symmetries to return a converged `scfres` object.
+    """
+    function setup_h_chain_pbe(; Ecut=15, n_bands_converge=nothing)
+        (; lattice, atoms, positions) = h_chain_system()
 
         # No symmetries, like the HF model, so that both bases share the FFT grid
         # (cf. DFTK's examples/exact_exchange.jl) and ρ, ψ can seed the HF SCF
@@ -251,11 +258,23 @@
             symmetries=false,
         )
         basis = PlaneWaveBasis(model_pbe; Ecut, kgrid=[1, 1, 1])
-        scfres_pbe = self_consistent_field(
+        return self_consistent_field(
             basis;
             is_converged=ScfConvergenceEnergy(1e-6),
-            kwargs_nbands...,
+            h_chain_kwargs_nbands(n_bands_converge)...,
         )
+    end
+
+    """
+        setup_h_chain_hf(; Ecut=15, n_bands_converge=nothing)
+
+    Sets up a Peierls distorted hydrogen chain with 4 atoms in the cell and performs a
+    Hartree-Fock calculation, seeded by `setup_h_chain_pbe`, to return a converged
+    `scfres` object.
+    """
+    function setup_h_chain_hf(; Ecut=15, n_bands_converge=nothing)
+        (; lattice, atoms, positions) = h_chain_system()
+        scfres_pbe = setup_h_chain_pbe(; Ecut, n_bands_converge)
 
         model_hf = model_HF(
             lattice,
@@ -273,7 +292,7 @@
             occupation=scfres_pbe.occupation,
             diagtolalg=DFTK.AdaptiveDiagtol(; ratio_ρdiff=1e-4),
             exxalg=DFTK.AceExx(),
-            kwargs_nbands...,
+            h_chain_kwargs_nbands(n_bands_converge)...,
         )
 
         return scfres_hf

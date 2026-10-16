@@ -25,7 +25,7 @@ argument.
 | target, e.g. [`DensitySpecificVirtuals`](@ref) | physics: *which* eigenvalue problem defines the virtual orbitals | `src/virtual_orbitals.jl` |
 | solver, e.g. [`LOBPCG`](@ref) | numerics: *how* an eigenvalue problem is solved | `src/eigensolvers/` |
 | strategy, e.g. [`CoulombGramian`](@ref) | numerics: *how* the Coulomb vertex is compressed | `src/coulomb_vertex.jl` |
-| operator, e.g. [`LevelShiftedOperator`](@ref) | numerics: matrix-free wrapper of a DFTK operator, applied with `mul!` | `src/operators.jl` |
+| operator, e.g. [`ProjectedShiftedOperator`](@ref) | numerics: matrix-free wrapper of a DFTK operator, applied with `mul!` | `src/operators.jl` |
 | callback, e.g. [`ShowProgress`](@ref) | output: reports the progress of long computations | `src/callbacks.jl` |
 
 The verbs transform the two data nouns into each other:
@@ -44,9 +44,12 @@ A typical workflow composes the verbs like this:
 
 ```julia
 occ_space, _ = split_occupied_virtual(OrbitalSpace(scfres))              # DFTK enters here
-dsv_space    = generate_orbitals(DensitySpecificVirtuals(n_orbitals=50), occ_space, ham)
+kernel       = only(t.kernel for t in ham.basis.model.term_types if t isa ExactExchange)
+target       = DensitySpecificVirtuals(n_orbitals=50, interaction_kernel=kernel)
+dsv_space    = generate_orbitals(target, occ_space, ham)
 active_space = canonicalize_orbitals(merge_spaces(occ_space, dsv_space), ham)
-fitting      = compress_coulomb_vertex(compute_coulomb_vertex(active_space), CoulombGramian())
+vertex       = compute_coulomb_vertex(active_space; interaction_kernel=kernel)
+fitting      = compress_coulomb_vertex(vertex, CoulombGramian())
 dump_cc4s_files(active_space, fitting)                                    # src/interfaces/
 ```
 
@@ -55,6 +58,15 @@ dump_cc4s_files(active_space, fitting)                                    # src/
 with `checkdocs = :exports`).
 
 ## Conventions
+
+- **Interaction kernel:** every result that depends on the electron-electron interaction
+  kernel (exchange-based virtual orbitals, the Coulomb vertex) takes it as a required
+  argument, the DFTK `InteractionKernel`, never as a default. Results store what they need
+  to stay consistent, e.g. [`DensityFitting`](@ref) holds the evaluated kernel, which the
+  interfaces write next to the vertex.
+- **Hamiltonian:** a user-supplied Hamiltonian is used as given, but rejected if its
+  exchange operator is compressed (ACE), which is exact only on the orbitals it was
+  sketched with.
 
 - **k-points:** per-k-point data are `Vector`s over k-points, e.g. `ψ[ik]` is an
   ``N_\text{pw} \times N`` matrix of orbital coefficients and `eigenvalues[ik]` a vector.
@@ -77,12 +89,21 @@ The docstring of each extension point states its contract.
 ### Virtual-orbital targets and eigensolvers
 
 [`generate_orbitals`](@ref) splits physics from numerics, so that targets and solvers
-combine freely. Per k-point it
+combine freely. Its inputs have fixed roles:
+
+- the mean-field Hamiltonian `ham` (Fock or Kohn-Sham) is used as given, with an
+  uncompressed exchange operator (see the conventions above);
+- `occ_space` holds all occupied orbitals of the reference, which are projected out;
+- `active`, a subset of `occ_space` (e.g. for embedding), defines exchange operators.
+  Targets build them with their `interaction_kernel`, at full strength and uncompressed,
+  independent of the exchange term of the SCF model.
+
+Per k-point it
 
 1. takes the eigenvalue problem `(; A, B, ε_offset)` of the target from
    [`_eigenproblems`](@ref). The operators are matrix-free wrappers of DFTK operators
-   ([`LevelShiftedOperator`](@ref), [`ProjectedShiftedOperator`](@ref)) that push the
-   occupied space out of the low end of the spectrum;
+   ([`ProjectedShiftedOperator`](@ref)) that project out the occupied space and push it
+   out of the low end of the spectrum;
 2. builds a stochastic guess `X0` of [`_n_guess`](@ref)`(solver, n)` vectors orthogonal to
    the occupied space, where `n` is the number of requested orbitals;
 3. solves for the lowest `n` eigenpairs with [`_solve`](@ref)`(A, B, X0, n, P, solver)`;
@@ -138,6 +159,7 @@ Each `# Cost` section states which of its arguments the symbols refer to.
 | docstring | code | meaning |
 |---|---|---|
 | ``N_\text{occ}``, ``N_\text{virt}``, ``N`` | `Nocc`, `Nvirt`, `N` | occupied, virtual and all orbitals |
+| ``N_\text{act}`` | `Nact` | active occupied orbitals, a subset of the occupied ones |
 | ``N_\text{bra}``, ``N_\text{ket}`` | `Nbra`, `Nket` | orbitals on the bra and ket side of a pair |
 | ``N_k`` | `Nk` | k-points |
 | ``N_\text{pw}`` | `Npw` | plane waves of the orbital basis |

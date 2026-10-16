@@ -41,9 +41,13 @@ function main()
     # Occupied HF orbitals as the starting point
     occ_space, _ = split_occupied_virtual(OrbitalSpace(scfres_hf))
 
+    # The interaction kernel of the HF exchange, used for the virtual orbitals and the
+    # Coulomb vertex below
+    kernel = only(t.kernel for t in scfres_hf.basis.model.term_types if t isa ExactExchange)
+
     # Generate a compressed virtual space (44 Density Specific Virtuals)
     println("Compute DSVs")
-    target = DensitySpecificVirtuals(n_orbitals=44)
+    target = DensitySpecificVirtuals(n_orbitals=44, interaction_kernel=kernel)
     dsv_space = generate_orbitals(target, occ_space, scfres_hf.ham)
 
     # DSVs are not orthonormal and carry no Fock energies: canonicalize the active space
@@ -54,7 +58,11 @@ function main()
     # Density fitting of the electron repulsion integrals: Coulomb vertex in the
     # plane-wave basis, compressed to a small auxiliary basis
     println("Compute Coulomb Vertex")
-    fitting = compute_coulomb_vertex(active_space; callback=ShowProgress())
+    fitting = compute_coulomb_vertex(
+        active_space;
+        interaction_kernel=kernel,
+        callback=ShowProgress(),
+    )
     fitting = compress_coulomb_vertex(fitting, CoulombGramian())
 
     # Dump to the specific correlation solver (Cc4s)
