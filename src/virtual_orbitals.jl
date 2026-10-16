@@ -210,13 +210,14 @@ function generate_orbitals(
         end
 
         # Stochastic initial guess in the orthogonal complement of the occupied space
-        X0 = construct_stochastic_orbitals(n_orbitals, kpt, T)
+        n_guess = min(_n_guess(solver, n_orbitals), Npw - size(ψocck, 2))
+        X0 = construct_stochastic_orbitals(n_guess, kpt, T)
         X0 .-= ψocck * (ψocck' * X0)
         X0 = Matrix(qr(X0).Q)
 
         preconditioner = DFTK.PreconditionerTPA(basis, kpt)
         (; A, B, ε_offset) = problems[ik]
-        (; λ, X) = _solve(A, B, X0, preconditioner, solver)
+        (; λ, X) = _solve(A, B, X0, n_orbitals, preconditioner, solver)
 
         push!(ψ_virt, X)
         push!(eigenvalues_virt, λ .+ ε_offset)

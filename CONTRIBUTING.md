@@ -42,15 +42,16 @@ dump_cc4s_files(active_space, fitting)                                    # src/
 
 `generate_orbitals` illustrates the split between physics and numerics:
 `_eigenproblems(target, occ_space, ham)` returns the operators `(; A, B, ε_offset)` per
-k-point, `_solve(A, B, X0, P, solver)` returns the lowest eigenpairs, so targets and solvers
-combine freely.
+k-point, `_solve(A, B, X0, n, P, solver)` returns the lowest `n` eigenpairs from a guess `X0`
+of `_n_guess(solver, n)` vectors, so targets and solvers combine freely.
 
 Extending the code usually means adding one such noun and its methods, for instance
 
 - **a virtual-orbital target:** a configuration struct with an `n_orbitals` field, added to
   the `VirtualOrbitalTarget` union, plus `_eigenproblems` and `_is_orthonormal` methods in
   `src/virtual_orbitals.jl`;
-- **an eigensolver:** a configuration struct plus a `_solve` method in `src/eigensolvers/`;
+- **an eigensolver:** a configuration struct plus a `_solve` method (and optionally
+  `_n_guess`) in `src/eigensolvers/`;
 - **a compression strategy:** a struct plus `_compress_coulomb_vertex(Γ, strategy) -> (Γ_F, U)`
   in `src/coulomb_vertex.jl`;
 - **a correlation-solver interface:** a file in `src/interfaces/` consuming an `OrbitalSpace`

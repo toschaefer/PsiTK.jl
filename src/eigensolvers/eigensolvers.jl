@@ -1,18 +1,26 @@
 @doc raw"""
-    LOBPCG(; tol=1e-6, maxiter=200, callback=DefaultLobpcgCallback())
+    LOBPCG(; tol=1e-6, maxiter=200, extra_fraction=0.03, n_extra_min=13,
+           callback=DefaultLobpcgCallback())
 
 Iterative eigensolver (`lobpcg` from LOBPCGEigensolver.jl) computing only the requested
 number of lowest eigenpairs. Suited when `n_orbitals` is small compared to the number of
 plane waves.
 
+To avoid stalling on a (near-)degenerate multiplet cut by the highest requested eigenpair,
+the block is enlarged by ``\max(n_\text{extra,min}, \lceil f_\text{extra} n \rceil)``
+vectors, but only the lowest ``n`` eigenpairs must converge (`n_conv_check`) and are
+returned.
+
 # Fields
 - `tol::Float64`: the residual tolerance for convergence
 - `maxiter::Int`: maximum number of iterations before the solver aborts
+- `extra_fraction::Float64`: fraction ``f_\text{extra}`` of extra block vectors
+- `n_extra_min::Int`: minimal number ``n_\text{extra,min}`` of extra block vectors
 - `callback`: called with the solver state after each iteration; the default prints the
   convergence progress, `callback=identity` silences it
 
 # Cost
-Per iteration, with ``n`` the number of requested eigenpairs:
+Per iteration, with ``n`` the block size (requested eigenpairs plus extra vectors):
 - time: ``n`` applications of the operators (see the target's docstring) plus
   ``O(N_\text{pw} n^2 + n^3)`` for the Rayleigh-Ritz step
 - memory: ``O(N_\text{pw} n)`` complex numbers for a few blocks of ``n`` vectors
@@ -20,6 +28,8 @@ Per iteration, with ``n`` the number of requested eigenpairs:
 Base.@kwdef struct LOBPCG
     tol::Float64 = 1e-6
     maxiter::Int = 200
+    extra_fraction::Float64 = 0.03
+    n_extra_min::Int = 13
     callback = DefaultLobpcgCallback()
 end
 
@@ -41,22 +51,36 @@ struct FullDiagonalization end
 include("davidson.jl")
 
 """
-    _solve(A, B, X0, preconditioner, solver) -> (; λ, X)
+    _n_guess(solver, n)
 
-Extension point for eigensolvers: the lowest `size(X0, 2)` eigenpairs of `A φ = λ B φ`
-(`B` may be `I`) with the eigenvalues `λ` and the eigenvectors as columns of `X`, starting
-from the guess `X0`. The eigenvalue problems come from [`_eigenproblems`](@ref). Each
-solver documents its cost per operator application in its docstring.
+Number of guess vectors `solver` wants in `X0` for computing the lowest `n` eigenpairs in
+[`_solve`](@ref). Defaults to `n`; a solver converging better with a larger block (e.g.
+[`LOBPCG`](@ref)) returns more.
+"""
+_n_guess(solver, n) = n
+function _n_guess(solver::LOBPCG, n)
+    return n + max(solver.n_extra_min, ceil(Int, solver.extra_fraction * n))
+end
+
+"""
+    _solve(A, B, X0, n, preconditioner, solver) -> (; λ, X)
+
+Extension point for eigensolvers: the lowest `n` eigenpairs of `A φ = λ B φ` (`B` may be
+`I`) with the eigenvalues `λ` and the eigenvectors as columns of `X`, starting from the
+guess `X0` with `size(X0, 2) ≥ n` columns (see [`_n_guess`](@ref)). The eigenvalue problems
+come from [`_eigenproblems`](@ref). Each solver documents its cost per operator application
+in its docstring.
 """
 function _solve end
 
-function _solve(A, B, X0, preconditioner, solver::LOBPCG)
-    res = lobpcg(A, X0, B, preconditioner, solver.tol, solver.maxiter; solver.callback)
-    return (; λ=res.λ, X=res.X)
+function _solve(A, B, X0, n, preconditioner, solver::LOBPCG)
+    res = lobpcg(A, X0, B, preconditioner, solver.tol, solver.maxiter;
+                 n_conv_check=n, solver.callback)
+    return (; λ=res.λ[1:n], X=res.X[:, 1:n])
 end
 
-function _solve(A, B, X0, preconditioner, ::FullDiagonalization)
-    N, n = size(X0)
+function _solve(A, B, X0, n, preconditioner, ::FullDiagonalization)
+    N = size(X0, 1)
     T = eltype(X0)
     A_dense = Hermitian(Matrix(A * Matrix{T}(I, N, N)))
     if B === I
@@ -67,6 +91,6 @@ function _solve(A, B, X0, preconditioner, ::FullDiagonalization)
     return (; λ=res.values[1:n], X=res.vectors[:, 1:n])
 end
 
-function _solve(A, B, X0, preconditioner, solver::BlockDavidson)
+function _solve(A, B, X0, n, preconditioner, solver::BlockDavidson)
     return davidson(A, X0, solver)
 end
