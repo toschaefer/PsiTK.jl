@@ -75,7 +75,9 @@ end
 
 """
 Union of the virtual-orbital targets accepted by [`generate_orbitals`](@ref). A new target
-is added here and implements [`_eigenproblems`](@ref) and [`_is_orthonormal`](@ref).
+is a configuration struct with an `n_orbitals` field, added here, with methods of
+[`_eigenproblems`](@ref) and [`_is_orthonormal`](@ref). It documents the cost of one
+application of its operators in its docstring.
 """
 const VirtualOrbitalTarget =
     Union{DensitySpecificVirtuals,CanonicalVirtuals,MaximalExchangeVirtuals}
@@ -89,8 +91,8 @@ Extension point for virtual-orbital targets: the eigenvalue problem that defines
 virtual orbitals of `target`, as a vector over k-points of `(; A, B, ε_offset)`. The lowest
 eigenpairs of `A φ = λ B φ` (`B = I` for a standard eigenvalue problem) are the wanted
 orbitals with eigenvalues `λ + ε_offset`. The eigenvalue problem is solved by
-[`_solve`](@ref), so targets and eigensolvers combine freely. Each target documents the
-cost of one application of its operators in its docstring.
+[`_solve`](@ref), so targets and eigensolvers combine freely (see
+[`VirtualOrbitalTarget`](@ref) for adding a target).
 """
 function _eigenproblems end
 

@@ -68,8 +68,11 @@ end
 Extension point for eigensolvers: the lowest `n` eigenpairs of `A φ = λ B φ` (`B` may be
 `I`) with the eigenvalues `λ` and the eigenvectors as columns of `X`, starting from the
 guess `X0` with `size(X0, 2) ≥ n` columns (see [`_n_guess`](@ref)). The eigenvalue problems
-come from [`_eigenproblems`](@ref). Each solver documents its cost per operator application
-in its docstring.
+come from [`_eigenproblems`](@ref).
+
+A new eigensolver is a configuration struct with a method of this function, and optionally
+of [`_n_guess`](@ref). It documents its cost in terms of operator applications in its
+docstring.
 """
 function _solve end
 

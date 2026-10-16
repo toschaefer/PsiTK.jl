@@ -311,7 +311,10 @@ end
 Extension point for the compression strategies of [`compress_coulomb_vertex`](@ref):
 compress the vertex `Γ` of shape `(Nk, Nbra, Nk, Nket, NG)` along its auxiliary axis
 to `Γ_F = Γ U` of shape `(Nk, Nbra, Nk, Nket, NF)`, with the transformation `U` of
-shape `(NG, NF)`. Each strategy documents its cost in its docstring.
+shape `(NG, NF)`.
+
+A new strategy is a configuration struct with a method of this function. It documents its
+cost in its docstring.
 """
 function _compress_coulomb_vertex end
 

@@ -10,6 +10,7 @@ makedocs(;
     pages=[
         "Home" => "index.md",
         "Manual" => "manual.md",
+        "Developer Guide" => "developer.md",
         "Code Reference" => "code_reference.md",
     ],
 )
