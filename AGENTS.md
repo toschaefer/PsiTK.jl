@@ -15,6 +15,7 @@ The code design is described in `docs/src/developer.md`.
     * When one docstring covers several methods (e.g. a convenience form), its argument list must explain every signature.
     * **Cost:** every public function and extension point whose time or memory grows faster than linearly with the system size (number of orbitals or plane waves, FFT log factors aside) has a `# Cost` section at the end of its docstring with the leading time terms and the peak memory. Update it whenever the scaling changes. Format and symbols: see "Computational cost" in `docs/src/developer.md`.
     * Write formulas in LaTeX: ```` ```math ```` blocks for displayed equations and double backticks (``` ``x`` ```) for inline math. Use `@doc raw"""` for docstrings with LaTeX, so backslashes need no escaping.
+  * **Design sync:** a change of the code design (a new or removed noun, verb or extension point, a changed contract, data layout or convention) updates `docs/src/developer.md`, the docstrings of the affected extension points, and every other place that describes it (`CONTRIBUTING.md`, `README.md`, `AGENTS.md`) in the same commit. Refer to code there with `@ref` links, never with copied signatures, so the docs build catches renames.
   * Use inline comments ONLY to explain physics/math reasoning, subtle normalizations, or workarounds. Never restate what the code mechanically does.
 
 ## Device-Agnostic Code (GPU/CPU)

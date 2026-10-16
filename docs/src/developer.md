@@ -7,7 +7,8 @@ CurrentModule = PsiTK
 This page is a map of the code: it names the parts, shows how they fit together and states
 the conventions shared by all of them. The details (signatures, formulas, costs) live in
 the docstrings, collected in the [Code Reference](@ref), and the code itself remains the
-authoritative documentation. When in doubt, follow the nearest existing example.
+authoritative documentation. A change of the design updates this page in the same commit.
+When in doubt, follow the nearest existing example.
 
 ## Nouns and verbs
 

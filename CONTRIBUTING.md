@@ -7,6 +7,8 @@ Contributions via pull request are welcome. Please:
   for the details.
 - Follow the existing code style ([Blue Style](https://github.com/invenia/BlueStyle),
   lines of about 92 characters).
+- If you change the code design, update the [Developer Guide](docs/src/developer.md) in the
+  same pull request.
 - Keep pull requests focused on a single change or feature.
 
 Questions? Open an issue.
