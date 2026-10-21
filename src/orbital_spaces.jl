@@ -84,8 +84,9 @@ function _check_uncompressed_exchange(ham)
     any(t -> t isa DFTK.TermExactExchange, ham.basis.terms) || return nothing
     for block in ham.blocks
         any(op -> op isa DFTK.ExchangeOperator, block.operators) && continue
-        error("The exchange operator of the Hamiltonian is compressed (e.g. ACE). " *
-              "Rebuild it with `exxalg=VanillaExx()`, e.g. use `scfres.ham`.")
+        throw(ArgumentError("The exchange operator of the Hamiltonian is compressed " *
+                            "(e.g. ACE). Rebuild it with `exxalg=VanillaExx()`, e.g. " *
+                            "use `scfres.ham`."))
     end
     return nothing
 end
@@ -96,7 +97,7 @@ end
 Diagonalizes the mean-field Hamiltonian `hamiltonian` (e.g. `scfres.ham`) in the subspace
 defined by `space.ψ` to return canonicalized, orthonormal eigenstates sorted by energy.
 Its exchange operator, if any, must be uncompressed: an ACE exchange (`exxalg=AceExx()`)
-is exact only on the orbitals it was sketched with and is rejected with an error.
+is exact only on the orbitals it was sketched with and is rejected with an `ArgumentError`.
 
 The occupations of `space` are redistributed by the aufbau principle: the largest
 occupations are assigned to the lowest eigenvalues. The Fermi level `εF` is placed in the
@@ -224,7 +225,10 @@ function select_orbitals(
     space::OrbitalSpace{B,T,R},
     indices::AbstractVector{<:AbstractVector{Int}},
 ) where {B,T,R}
-    @assert length(indices) == length(space.ψ)
+    length(indices) == length(space.ψ) ||
+        throw(DimensionMismatch("Got index lists for $(length(indices)) k-points, but " *
+                                "the space has $(length(space.ψ)). Pass one list per " *
+                                "k-point or a single list for all."))
     ψ_sel = Matrix{T}[]
     eigenvalues_sel = Vector{R}[]
     occupation_sel = Vector{R}[]

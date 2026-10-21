@@ -80,6 +80,16 @@ with `checkdocs = :exports`).
 - **Callbacks:** long computations take a `callback` keyword, called with a `NamedTuple`
   after each step; `callback=identity` silences it. Step-wise loops pass
   `(; step, total_steps)`, which [`ShowProgress`](@ref) turns into a progress bar.
+- **Errors and assertions:** check a requirement in the routine whose algorithm needs
+  it, as early as the user's choice reaches it (a public function, a constructor, or a
+  validation helper called first). Throw a typed exception whose message says how to fix
+  it: `DimensionMismatch` for inconsistent sizes, `ArgumentError` for any other invalid
+  or unsupported input. Keep all "not supported (yet)" checks of a feature together in
+  that one place. Low-level helpers carry no such policy and only `@assert` the
+  preconditions their callers guarantee; a failing assertion is a bug in PsiTK, never a
+  user error, and code must stay correct if asserts are not evaluated. E.g.
+  [`dump_cc4s_files`](@ref) rejects spaces beyond the Γ point or with unsorted
+  eigenvalues, which the writers of the single files then only assert.
 
 ## Extension points
 

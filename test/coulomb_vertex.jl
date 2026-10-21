@@ -49,11 +49,11 @@
     @test size(ρ_full, 5) > size(ρmnG, 5)
 
     # Ecut_ratio=4 (DFTK's default supersampling of 2) holds the exact overlap densities;
-    # beyond the FFT grid an error is raised instead of silently truncating
+    # beyond the FFT grid an ArgumentError is raised instead of silently truncating
     ρ_exact, G_exact = compute_overlap_densities(space; Ecut_ratio=4)
     @test size(ρ_exact, 5) == length(G_exact) > size(ρ_full, 5)
     @test all(G -> -G in G_exact, G_exact)
-    @test_throws ErrorException compute_overlap_densities(space; Ecut_ratio=8)
+    @test_throws ArgumentError compute_overlap_densities(space; Ecut_ratio=8)
 
     # The (basis, ψ) forms agree with the OrbitalSpace shorthands; the bra ≠ ket path
     # (no symmetry shortcut) reproduces the symmetric result
@@ -67,8 +67,8 @@
     @test size(ρ_ov)[1:4] == (Nk, Nocc, Nk, N)
     @test ρ_ov ≈ ρmnG[:, 1:Nocc, :, :, :]
 
-    # The Cc4s dump refuses non-orthonormal (non-canonical) spaces and vertices that do not
-    # belong to the active space
+    # The Cc4s dump refuses non-orthonormal or unsorted (non-canonical) spaces, vertices
+    # that do not belong to the active space and existing files, before writing anything
     space_nonortho = OrbitalSpace(
         basis,
         space.ψ,
@@ -77,9 +77,16 @@
         space.εF,
         false,
     )
-    @test_throws ErrorException dump_cc4s_files(space_nonortho, fitting; folder=mktempdir())
+    @test_throws ArgumentError dump_cc4s_files(space_nonortho, fitting; folder=mktempdir())
+    space_unsorted = select_orbitals(space, N:-1:1)
+    @test_throws ArgumentError dump_cc4s_files(space_unsorted, fitting; folder=mktempdir())
     space_small = select_orbitals(space, 1:(N - 1))
-    @test_throws ErrorException dump_cc4s_files(space_small, fitting; folder=mktempdir())
+    @test_throws DimensionMismatch dump_cc4s_files(space_small, fitting; folder=mktempdir())
+    folder = mktempdir()
+    touch(joinpath(folder, "CoulombPotential.yaml"))
+    @test_throws ArgumentError dump_cc4s_files(space, fitting; folder)
+    @test readdir(folder) == ["CoulombPotential.yaml"]
+    @test_throws DimensionMismatch select_orbitals(space, [1:N, 1:N])
 
     # CoulombGramian compression: Γ_F = Γ_G U with the returned singular vectors
     fitting_cg = compress_coulomb_vertex(fitting, CoulombGramian(thresh=1e-3))

@@ -48,7 +48,11 @@ function compute_overlap_densities(
     callback=identity,
 )
     all(kpt -> iszero(kpt.coordinate), basis.kpoints) ||
-        error("Overlap densities are only implemented for Gamma-point calculations.")
+        throw(ArgumentError("Overlap densities are only implemented at the Γ point. " *
+                            "Run the SCF with `kgrid=[1, 1, 1]`."))
+    _cutoff_fits_fft_grid(basis, Ecut_ratio) ||
+        throw(ArgumentError("Ecut_ratio=$Ecut_ratio exceeds the FFT grid of the basis. " *
+                            "Choose at most supersampling^2, i.e. 4 for DFTK's default."))
     G_indices = _G_indices_within_cutoff(basis, Ecut_ratio)
     ρmnG = _compute_overlap_densities(basis, ψ_bra, ψ_ket; G_indices, callback)
     return ρmnG, G_vectors(basis)[G_indices]
@@ -67,18 +71,22 @@ function compute_overlap_densities(space::OrbitalSpace; kwargs...)
     return compute_overlap_densities(space.basis, space.ψ; kwargs...)
 end
 
-# Linear indices into the full FFT cube G_vectors(basis) of the G vectors with
-# |G|^2/2 <= Ecut * Ecut_ratio. The cube covers -cld(N-1,2):fld(N-1,2) per axis; requiring
-# the sphere to fit into the smaller side (N-1)÷2 keeps the selection closed under G -> -G.
-function _G_indices_within_cutoff(basis, Ecut_ratio)
-    Ecut_reduced = basis.Ecut * Ecut_ratio
+# Whether the sphere |G|^2/2 <= Ecut * Ecut_ratio fits into the full FFT cube
+# G_vectors(basis). The cube covers -cld(N-1,2):fld(N-1,2) per axis; requiring the sphere
+# to fit into the smaller side (N-1)÷2 keeps the selection closed under G -> -G.
+function _cutoff_fits_fft_grid(basis, Ecut_ratio)
     # The sphere of radius Gmax extends to |n_i| <= Gmax |a_i| / 2π in integer coordinates
-    Gmax = sqrt(2 * Ecut_reduced)
-    for (i, a_i) in enumerate(eachcol(basis.model.lattice))
-        Gmax * norm(a_i) / 2π <= (basis.fft_size[i] - 1) ÷ 2 ||
-            error("Ecut_ratio=$Ecut_ratio exceeds the FFT grid of the basis " *
-                  "(at most supersampling^2, i.e. 4 for DFTK's default).")
+    Gmax = sqrt(2 * basis.Ecut * Ecut_ratio)
+    return all(zip(eachcol(basis.model.lattice), basis.fft_size)) do (a_i, N_i)
+        Gmax * norm(a_i) / 2π <= (N_i - 1) ÷ 2
     end
+end
+
+# Linear indices into the full FFT cube G_vectors(basis) of the G vectors with
+# |G|^2/2 <= Ecut * Ecut_ratio
+function _G_indices_within_cutoff(basis, Ecut_ratio)
+    @assert _cutoff_fits_fft_grid(basis, Ecut_ratio)
+    Ecut_reduced = basis.Ecut * Ecut_ratio
     recip_lattice = basis.model.recip_lattice
     # vec: linear indices into the cube (findall on the 3D array would give CartesianIndex)
     return findall(vec(G_vectors(basis))) do G

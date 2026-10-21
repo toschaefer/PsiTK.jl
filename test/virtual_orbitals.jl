@@ -154,9 +154,9 @@ end
         DensitySpecificVirtuals(n_orbitals=Nvirt, interaction_kernel=kernel),
     )
     for target in targets
-        @test_throws ErrorException generate_orbitals(target, occ_space, ham_ace; solver)
+        @test_throws ArgumentError generate_orbitals(target, occ_space, ham_ace; solver)
     end
-    @test_throws ErrorException canonicalize_orbitals(occ_space, ham_ace)
+    @test_throws ArgumentError canonicalize_orbitals(occ_space, ham_ace)
 
     # Embedding: only the HOMO is active, the virtuals stay orthogonal to all occupied
     # orbitals and the exchange operator is that of the active orbital only
@@ -187,7 +187,7 @@ end
     @test canon_act.eigenvalues[1] ≈ canon_all.eigenvalues[1]
 
     # Active orbitals outside the occupied space are rejected
-    @test_throws ErrorException generate_orbitals(
+    @test_throws ArgumentError generate_orbitals(
         DensitySpecificVirtuals(n_orbitals=Nvirt, interaction_kernel=kernel),
         occ_space,
         ham;

@@ -197,12 +197,15 @@ end
 # The active orbitals must lie in the span of the orthonormal occupied orbitals
 function _check_active_space(active, occ_space; tol=1e-8)
     active.basis === occ_space.basis ||
-        error("`active` and `occ_space` must be defined on the same basis.")
+        throw(ArgumentError("`active` and `occ_space` must be defined on the same " *
+                            "basis. Select `active` from `occ_space`, e.g. with " *
+                            "`select_orbitals`."))
     for (Xa, Xo) in zip(active.ψ, occ_space.ψ)
         deviation = norm(Xa - Xo * (Xo' * Xa))
         deviation < tol * max(1, norm(Xa)) ||
-            error("The active orbitals do not lie in the occupied space (deviation " *
-                  "$deviation).")
+            throw(ArgumentError("The active orbitals do not lie in the occupied space " *
+                                "(deviation $deviation). Select them from `occ_space`, " *
+                                "e.g. with `select_orbitals`."))
     end
     return nothing
 end
@@ -220,7 +223,7 @@ eigenvalue problem defined by `target` with the eigensolver `solver`.
 - `ham`: the DFTK mean-field Hamiltonian of `occ_space` (the Fock operator for
   Hartree-Fock, the Kohn-Sham Hamiltonian for DFT), e.g. `scfres.ham`. Its exchange
   operator, if any, must be uncompressed: an ACE exchange (`exxalg=AceExx()`) is exact
-  only on the orbitals it was sketched with and is rejected with an error
+  only on the orbitals it was sketched with and is rejected with an `ArgumentError`
 - `active`: the occupied orbitals to correlate, a subset of `occ_space` (e.g. via
   [`select_orbitals`](@ref) for embedding). They define the exchange operator
   ``\mathcal K`` of [`DensitySpecificVirtuals`](@ref) and
@@ -258,7 +261,8 @@ function generate_orbitals(
 ) where {TB,T,R}
     _check_uncompressed_exchange(ham)
     ham.basis === occ_space.basis ||
-        error("`ham` and `occ_space` must be defined on the same basis.")
+        throw(ArgumentError("`ham` and `occ_space` must be defined on the same basis. " *
+                            "Pass the Hamiltonian of the reference, e.g. `scfres.ham`."))
     _check_active_space(active, occ_space)
 
     basis = ham.basis

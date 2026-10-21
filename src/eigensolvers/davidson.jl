@@ -33,7 +33,8 @@ Francesco Mereto, Master's Thesis, 2026 (link?)
 """
 function davidson(A, X0, solver::BlockDavidson; kwargs...)
     # TODO: Mereto
-    error("Block Davidson solver not implemented yet.")
+    throw(ArgumentError("The BlockDavidson solver is not implemented yet. Use " *
+                        "`LOBPCG()` or `FullDiagonalization()`."))
 
     # Expected to return a named tuple or struct, for example:
     # return (λ = eigenvalues, X = eigenvectors, residual = residuals)

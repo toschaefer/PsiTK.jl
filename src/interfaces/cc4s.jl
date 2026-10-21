@@ -16,13 +16,9 @@ function write_cc4s_tensor(
     elementType::String="IeeeBinaryFile",
     metaData::Dict=Dict{String,Any}(),
     unit::Float64=1.0,
-    force=false,
 )
-    yamlfile = joinpath(folder, "$name.yaml")
-    elementsfile = joinpath(folder, "$name.elements")
-    if !force && (isfile(yamlfile) || isfile(elementsfile))
-        error("Generated files $yamlfile and/or $elementsfile exists.")
-    end
+    @assert elementType in ("TextFile", "IeeeBinaryFile")
+    yamlfile, elementsfile = _cc4s_files(folder, name)
 
     data = Dict(
         "version" => 100,
@@ -40,12 +36,10 @@ function write_cc4s_tensor(
             for val in tensor_data
                 println(fp, val)
             end
-        elseif elementType == "IeeeBinaryFile"
+        else
             for val in tensor_data
                 write(fp, val)
             end
-        else
-            error("Unsupported elementType $elementType")
         end
     end
 
@@ -56,8 +50,7 @@ end
 function write_eigenenergies(
     folder::AbstractString,
     eigenvalues::AbstractVector,
-    εF::Number;
-    force=false,
+    εF::Number,
 )
     @assert length(eigenvalues) == 1
     εk = eigenvalues[1]
@@ -76,7 +69,6 @@ function write_eigenenergies(
         scalarType="Real64",
         elementType="TextFile",
         metaData,
-        force,
     )
 end
 
@@ -97,7 +89,11 @@ Write Cc4s input files (*.yaml and *.elements):
 - CoulombPotential
 - CoulombVertexSingularVectors (only if `fitting` is compressed)
 
-Requires a Gamma-only calculation with integer occupations.
+Requires a single k-point at Γ and orthonormal canonical orbitals (see
+[`canonicalize_orbitals`](@ref)) with eigenvalues in non-decreasing order and integer
+occupations. Throws an `ArgumentError` otherwise, or if a file to write exists and `force`
+is false, and a `DimensionMismatch` if `fitting` does not match `active_space`; all before
+anything is computed or written.
 
 # Arguments
 - `active_space`: the `OrbitalSpace` containing the bands (occupation and eigenvalues)
@@ -122,35 +118,19 @@ function dump_cc4s_files(
     folder::AbstractString=joinpath(pwd(), "cc4s"),
     force=false,
 )
-    # Cc4s expects canonical HF orbitals: orthonormal, with Fock eigenvalues
-    if !active_space.is_orthonormal
-        error("Cc4s interface requires orthonormal canonical orbitals. " *
-              "Apply `canonicalize_orbitals` to the active space first.")
-    end
-    size(fitting.Γ, 2) == size(fitting.Γ, 4) == size(active_space.ψ[1], 2) ||
-        error("The Coulomb vertex does not match the active space. Compute `fitting` " *
-              "from `active_space` itself.")
+    _check_cc4s_input(active_space, fitting, folder, force)
     mkpath(folder)
 
     # --- dump Eigenvalues
     # For cc4s we just pass the eigenvalues from the active space
-    # (Assuming 1 kpoint for now)
     basis = active_space.basis
     eigenvalues = active_space.eigenvalues
     εF = active_space.εF  # Fermi level
 
-    # Cc4s only supports gapped systems with integer occupancies
-    for occ in active_space.occupation[1]
-        if !(occ ≈ 0.0 || occ ≈ 1.0 || occ ≈ 2.0)
-            error("Cc4s interface requires integer occupancies. " *
-                  "Fractional occupations detected.")
-        end
-    end
-
-    files_ene = write_eigenenergies(folder, eigenvalues, εF; force)
+    files_ene = write_eigenenergies(folder, eigenvalues, εF)
 
     # --- dump Coulomb Vertex
-    files_coul = write_coulomb_vertex(folder, fitting.Γ; force)
+    files_coul = write_coulomb_vertex(folder, fitting.Γ)
 
     # --- Split space by Fermi Energy for Delta Integrals
     idx_holes = findall(ε -> ε <= εF, eigenvalues[1])
@@ -179,7 +159,6 @@ function dump_cc4s_files(
         dimensions=dim_hh,
         scalarType="Complex64",
         elementType="IeeeBinaryFile",
-        force,
     )
 
     # --- dump DeltaIntegralsPPHH
@@ -209,27 +188,72 @@ function dump_cc4s_files(
         dimensions=dim_pphh,
         scalarType="Complex64",
         elementType="IeeeBinaryFile",
-        force,
     )
 
     # --- dump Grid Vectors
-    files_grid = write_grid_vectors(folder, basis, fitting.G_vectors; force)
+    files_grid = write_grid_vectors(folder, basis, fitting.G_vectors)
 
     # --- dump Coulomb Potential
-    files_pot = write_coulomb_potential(folder, fitting.kernel_fourier; force)
+    files_pot = write_coulomb_potential(folder, fitting.kernel_fourier)
 
     # --- dump Coulomb Vertex Singular Vectors
     U = fitting.singular_vectors
-    files_u = isnothing(U) ? String[] : write_singular_vectors(folder, U; force)
+    files_u = isnothing(U) ? String[] : write_singular_vectors(folder, U)
 
     return vcat(files_ene, files_coul, files_hh, files_pphh, files_grid, files_pot, files_u)
+end
+
+# All requirements of the Cc4s interface, which the writers below only assert
+function _check_cc4s_input(active_space, fitting, folder, force)
+    kpoints = active_space.basis.kpoints
+    length(kpoints) == 1 && iszero(only(kpoints).coordinate) ||
+        throw(ArgumentError("Cc4s interface supports only a single k-point at Γ. Run " *
+                            "the SCF with `kgrid=[1, 1, 1]` and without spin " *
+                            "polarization."))
+    # Cc4s expects canonical HF orbitals: orthonormal, with Fock eigenvalues
+    active_space.is_orthonormal ||
+        throw(ArgumentError("Cc4s interface requires orthonormal canonical orbitals. " *
+                            "Apply `canonicalize_orbitals` to the active space first."))
+    ε = only(active_space.eigenvalues)
+    maximum(abs, sort(ε) - ε; init=0.0) < 1e-10 ||
+        throw(ArgumentError("Cc4s interface requires eigenvalues in non-decreasing " *
+                            "order. Apply `canonicalize_orbitals` to the active space " *
+                            "first."))
+    # Cc4s only supports gapped systems with integer occupancies
+    for occ in only(active_space.occupation)
+        occ ≈ 0.0 || occ ≈ 1.0 || occ ≈ 2.0 ||
+            throw(ArgumentError("Cc4s interface requires integer occupations, found " *
+                                "$occ. Use a gapped reference without smearing."))
+    end
+    N = size(only(active_space.ψ), 2)
+    size(fitting.Γ)[1:4] == (1, N, 1, N) ||
+        throw(DimensionMismatch("The Coulomb vertex of size $(size(fitting.Γ)[1:4]) " *
+                                "does not match the active space of $N orbitals. " *
+                                "Compute `fitting` from `active_space` itself."))
+    force && return nothing
+    for name in _cc4s_tensor_names(fitting), file in _cc4s_files(folder, name)
+        isfile(file) &&
+            throw(ArgumentError("$file exists. Pass `force=true` to overwrite it or " *
+                                "choose another `folder`."))
+    end
+    return nothing
+end
+
+function _cc4s_tensor_names(fitting)
+    names = ["EigenEnergies", "CoulombVertex", "DeltaIntegralsHH", "DeltaIntegralsPPHH",
+             "GridVectors", "CoulombPotential"]
+    isnothing(fitting.singular_vectors) || push!(names, "CoulombVertexSingularVectors")
+    return names
+end
+
+function _cc4s_files(folder, name)
+    return joinpath(folder, "$name.yaml"), joinpath(folder, "$name.elements")
 end
 
 # Write CoulombVertex.yaml and CoulombVertex.elements
 function write_coulomb_vertex(
     folder::AbstractString,
-    ΓnmF::AbstractArray{T,5};
-    force=true,
+    ΓnmF::AbstractArray{T,5},
 ) where {T}
     Nk = size(ΓnmF, 1)
     N = size(ΓnmF, 2)
@@ -261,7 +285,6 @@ function write_coulomb_vertex(
         scalarType="Complex64",
         elementType="IeeeBinaryFile",
         metaData,
-        force,
     )
 end
 
@@ -269,8 +292,7 @@ end
 function write_grid_vectors(
     folder::AbstractString,
     basis::PlaneWaveBasis,
-    G_vectors::AbstractVector;
-    force=false,
+    G_vectors::AbstractVector,
 )
     # The GridVectors object contains the grid vectors of the employed plane-wave basis set
     model = basis.model
@@ -301,15 +323,13 @@ function write_grid_vectors(
         elementType="TextFile",
         metaData,
         unit=1.0,
-        force,
     )
 end
 
 # Write CoulombPotential.yaml and CoulombPotential.elements
 function write_coulomb_potential(
     folder::AbstractString,
-    kernel_fourier::AbstractVector;
-    force=false,
+    kernel_fourier::AbstractVector,
 )
     dimensions = [Dict("length" => length(kernel_fourier), "type" => "Momentum")]
 
@@ -321,15 +341,13 @@ function write_coulomb_potential(
         scalarType="Real64",
         elementType="TextFile",
         unit=1.0,
-        force,
     )
 end
 
 # Write CoulombVertexSingularVectors.yaml and CoulombVertexSingularVectors.elements
 function write_singular_vectors(
     folder::AbstractString,
-    coulomb_vertex_singular_vectors::AbstractMatrix{T};
-    force=false,
+    coulomb_vertex_singular_vectors::AbstractMatrix{T},
 ) where {T}
     # coulomb_vertex_singular_vectors has dimensions (NG, NF)
     NG, NF = size(coulomb_vertex_singular_vectors)
@@ -352,6 +370,5 @@ function write_singular_vectors(
         scalarType="Complex64",
         elementType="IeeeBinaryFile",
         unit=1.0,
-        force,
     )
 end
