@@ -51,6 +51,9 @@
     # LOBPCG and FullDiagonalization solve the same eigenproblem
     λ_fd = virt_canon_fd.eigenvalues[1]
     @test isapprox(virt_canon_lobpcg.eigenvalues[1], λ_fd, rtol=1e-4)
+    # lobpcg itself is silent when it hits maxiter
+    @test_logs (:warn, r"eigenpairs converged") match_mode=:any generate_orbitals(
+        target, occ_space, ham; solver=LOBPCG(maxiter=1, callback=identity))
 
     # ---------------------------------------------------------
     # 3. DensitySpecificVirtuals with both solvers

@@ -1,5 +1,5 @@
 """
-    BlockDavidson(; tol=1e-6, use_jabobi_davidson=false, maxiter=200)
+    BlockDavidson(; tol=1e-8, use_jabobi_davidson=false, maxiter=1000)
 
 Configuration struct for the Block Davidson iterative eigensolver.
 
@@ -10,9 +10,9 @@ Configuration struct for the Block Davidson iterative eigensolver.
 - `maxiter::Int`: Maximum number of iterations before the solver aborts.
 """
 Base.@kwdef struct BlockDavidson
-    tol::Float64 = 1e-6
+    tol::Float64 = 1e-8
     use_jabobi_davidson::Bool = false
-    maxiter::Int = 200
+    maxiter::Int = 1000
 end
 
 """

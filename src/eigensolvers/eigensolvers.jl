@@ -1,5 +1,5 @@
 @doc raw"""
-    LOBPCG(; tol=1e-6, maxiter=200, extra_fraction=0.03, n_extra_min=13,
+    LOBPCG(; tol=1e-8, maxiter=1000, extra_fraction=0.03, n_extra_min=13,
            callback=DefaultLobpcgCallback())
 
 Iterative eigensolver (`lobpcg` from LOBPCGEigensolver.jl) computing only the requested
@@ -13,7 +13,7 @@ returned.
 
 # Fields
 - `tol::Float64`: the residual tolerance for convergence
-- `maxiter::Int`: maximum number of iterations before the solver aborts
+- `maxiter::Int`: maximum number of iterations before the solver aborts with a warning
 - `extra_fraction::Float64`: fraction ``f_\text{extra}`` of extra block vectors
 - `n_extra_min::Int`: minimal number ``n_\text{extra,min}`` of extra block vectors
 - `callback`: called with the solver state after each iteration; the default prints the
@@ -26,8 +26,8 @@ Per iteration, with ``n`` the block size (requested eigenpairs plus extra vector
 - memory: ``O(N_\text{pw} n)`` complex numbers for a few blocks of ``n`` vectors
 """
 Base.@kwdef struct LOBPCG
-    tol::Float64 = 1e-6
-    maxiter::Int = 200
+    tol::Float64 = 1e-8
+    maxiter::Int = 1000
     extra_fraction::Float64 = 0.03
     n_extra_min::Int = 13
     callback = DefaultLobpcgCallback()
@@ -79,6 +79,11 @@ function _solve end
 function _solve(A, B, X0, n, preconditioner, solver::LOBPCG)
     res = lobpcg(A, X0, B, preconditioner, solver.tol, solver.maxiter;
                  n_conv_check=n, solver.callback)
+    # lobpcg returns the current iterate without any notice when it hits maxiter
+    nconv = count(<(solver.tol), @view res.residual_norms[1:n])
+    nconv == n ||
+        @warn "LOBPCG: only $nconv of $n eigenpairs converged to $(solver.tol) in " *
+              "$(solver.maxiter) iterations. Increase `maxiter` or `tol`."
     return (; λ=res.λ[1:n], X=res.X[:, 1:n])
 end
 
