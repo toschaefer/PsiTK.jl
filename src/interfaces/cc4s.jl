@@ -1,11 +1,13 @@
 # This file initially based on code of the experimental "cc4s" branch in DFTK
 # written by Michael Herbst
 
-"""
+@doc raw"""
     write_cc4s_tensor(folder, name, tensor_data; kwargs...)
 
 Generic function to write a Tensor object in Cc4s format, including its YAML
-metadata file and its binary/text elements file.
+metadata file and its binary/text elements file. `tensor_data` iterates the elements with
+the first index of `dimensions` fastest, as Julia stores arrays: Cc4s fills its tensors by
+the global index ``g = i_1 + n_1 (i_2 + n_2 (i_3 + \dots))``.
 """
 function write_cc4s_tensor(
     folder::AbstractString,
@@ -34,7 +36,7 @@ function write_cc4s_tensor(
     open(elementsfile, "w") do fp
         if elementType == "TextFile"
             for val in tensor_data
-                println(fp, val)
+                _print_cc4s_element(fp, val)
             end
         else
             for val in tensor_data
@@ -44,6 +46,119 @@ function write_cc4s_tensor(
     end
 
     return [yamlfile, elementsfile]
+end
+
+# Cc4s text files hold one element per line, complex numbers as (re,im)
+_print_cc4s_element(io, x::Real) = println(io, x)
+_print_cc4s_element(io, z::Complex) = println(io, '(', real(z), ',', imag(z), ')')
+
+@doc raw"""
+    read_cc4s_tensor(folder, name)
+
+Read the tensor `name` in Cc4s format from the files `name.yaml` and `name.elements` in
+`folder`, as written by Cc4s (e.g. `name="rdm.ph"` for the particle-hole block of the
+one-particle reduced density matrix) or by [`dump_cc4s_files`](@ref).
+
+The indices of the returned array follow the order of the `dimensions` in the YAML file.
+Cc4s stores the first index fastest, as Julia does, unless the elements are marked as
+`rowMajor`, in which case the array is permuted accordingly.
+
+Throws an `ArgumentError` if a file is missing or uses a format that is not supported
+(a version other than 100, block-sparse tensors, the `halfGrid` format of real Coulomb
+vertices), and a `DimensionMismatch` if the number of elements in the file does not match
+the dimensions.
+
+# Returns
+A `NamedTuple` `(; tensor, dimensions, unit, metaData)` with
+- `tensor`: an `Array{Float64}` for the scalar type `Real64` or an `Array{ComplexF64}`
+  for `Complex64`, not scaled by `unit`;
+- `dimensions`: a `Vector` of `Dict`s, one per index, with its `"length"` and optionally
+  its `"type"`, e.g. `"Hole"`, `"Particle"` or `"State"`;
+- `unit`: the unit of the elements;
+- `metaData`: the `Dict` of meta data, empty if the file has none.
+
+# Cost
+Time and memory are linear in the number of elements, e.g. ``N^2 N_F`` complex numbers
+for the Coulomb vertex.
+"""
+function read_cc4s_tensor(folder::AbstractString, name::AbstractString)
+    yamlfile, elementsfile = _cc4s_files(folder, name)
+    for file in (yamlfile, elementsfile)
+        isfile(file) || throw(ArgumentError("Cc4s tensor file $file not found."))
+    end
+    node = YAML.load_file(yamlfile)
+    _check_cc4s_tensor_node(node, yamlfile)
+
+    T = node["scalarType"] == "Real64" ? Float64 : ComplexF64
+    dimensions = _cc4s_list(node["dimensions"])
+    lens = Tuple(Int(dim["length"]) for dim in dimensions)
+    elements = if node["elements"]["type"] == "TextFile"
+        _read_cc4s_elements_text(elementsfile, T, prod(lens))
+    else
+        _read_cc4s_elements_binary(elementsfile, T, prod(lens))
+    end
+    tensor = if get(node["elements"], "rowMajor", false)
+        permutedims(reshape(elements, reverse(lens)), length(lens):-1:1)
+    else
+        reshape(elements, lens)
+    end
+    metaData = something(get(node, "metaData", nothing), Dict{String,Any}())
+    return (; tensor, dimensions, unit=Float64(node["unit"]), metaData)
+end
+
+# All format requirements of `read_cc4s_tensor`, which the element readers only assert
+function _check_cc4s_tensor_node(node, yamlfile)
+    get(node, "type", nothing) == "Tensor" ||
+        throw(ArgumentError("$yamlfile does not describe a Cc4s tensor."))
+    get(node, "version", nothing) == 100 ||
+        throw(ArgumentError("$yamlfile has the Cc4s format version " *
+                            "$(get(node, "version", nothing)), only 100 is supported."))
+    node["scalarType"] in ("Real64", "Complex64") ||
+        throw(ArgumentError("$yamlfile has the scalar type $(node["scalarType"]), only " *
+                            "Real64 and Complex64 are supported."))
+    node["elements"]["type"] in ("TextFile", "IeeeBinaryFile") ||
+        throw(ArgumentError("$yamlfile has elements of type " *
+                            "$(node["elements"]["type"]), only TextFile and " *
+                            "IeeeBinaryFile are supported."))
+    haskey(node, "nonZeroCondition") &&
+        throw(ArgumentError("$yamlfile describes a block-sparse tensor, which is not " *
+                            "supported. Write it densely from Cc4s."))
+    metaData = something(get(node, "metaData", nothing), Dict())
+    get(metaData, "halfGrid", 0) == 1 &&
+        throw(ArgumentError("$yamlfile uses the halfGrid format of real Coulomb " *
+                            "vertices, which is not supported."))
+    return nothing
+end
+
+# Cc4s writes YAML lists as maps with the keys 0, 1, ...
+_cc4s_list(node::AbstractVector) = node
+_cc4s_list(node::AbstractDict) = [node[i] for i in 0:(length(node) - 1)]
+
+function _read_cc4s_elements_binary(file, ::Type{T}, n) where {T}
+    filesize(file) == n * sizeof(T) ||
+        throw(DimensionMismatch("$file holds $(filesize(file)) bytes, but its " *
+                                "dimensions require $n elements of $(sizeof(T)) bytes."))
+    return read!(file, Vector{T}(undef, n))
+end
+
+function _read_cc4s_elements_text(file, ::Type{T}, n) where {T}
+    elements = Vector{T}(undef, n)
+    count = 0
+    for line in eachline(file)
+        isempty(strip(line)) && continue
+        count += 1
+        count <= n && (elements[count] = _parse_cc4s_element(T, line))
+    end
+    count == n ||
+        throw(DimensionMismatch("$file holds $count elements, but its dimensions " *
+                                "require $n."))
+    return elements
+end
+
+_parse_cc4s_element(::Type{Float64}, s) = parse(Float64, s)
+function _parse_cc4s_element(::Type{ComplexF64}, s)
+    re, im = split(strip(s, (' ', '\t', '(', ')')), ',')
+    return complex(parse(Float64, re), parse(Float64, im))
 end
 
 # Write EigenEnergies.yaml and EigenEnergies.elements
@@ -143,11 +258,7 @@ function dump_cc4s_files(
     DeltaIntegralsHH = compute_delta_integrals(basis, hole_space.ψ, Val(:HH))
     Nocc = size(DeltaIntegralsHH, 1)
 
-    # Row-major ordering for C++: i, j
-    tensor_data_hh = (
-        convert(Complex{Cdouble}, DeltaIntegralsHH[i, j])
-        for i in 1:Nocc for j in 1:Nocc
-    )
+    tensor_data_hh = (convert(Complex{Cdouble}, Δ) for Δ in DeltaIntegralsHH)
     dim_hh = [
         Dict("length" => Nocc, "type" => "Hole"),
         Dict("length" => Nocc, "type" => "Hole"),
@@ -170,11 +281,7 @@ function dump_cc4s_files(
     )
     Nvirt = size(DeltaIntegralsPPHH, 1)
 
-    # Row-major ordering for C++: a, b, i, j
-    tensor_data_pphh = (
-        convert(Complex{Cdouble}, DeltaIntegralsPPHH[a, b, i, j])
-        for a in 1:Nvirt for b in 1:Nvirt for i in 1:Nocc for j in 1:Nocc
-    )
+    tensor_data_pphh = (convert(Complex{Cdouble}, Δ) for Δ in DeltaIntegralsPPHH)
     dim_pphh = [
         Dict("length" => Nvirt, "type" => "Particle"),
         Dict("length" => Nvirt, "type" => "Particle"),
@@ -269,12 +376,11 @@ function write_coulomb_vertex(
     ]
     metaData = Dict("halfGrid" => 0)  # Complex integrals
 
-    # Cc4s is written in C++
-    # C++ is row-major, julia is column-major. Therefore we write
-    # ΓnmF in a stream using chunks of all field Fs for given (n,m)
+    # Γ[F, n, m] in chunks of all F, which avoids a permuted copy of the whole vertex.
+    # Cc4s conjugates the first orbital index n, as PsiTK does.
     tensor_data = (
-        convert(Vector{Complex{Cdouble}}, vec(ΓnmF[1, n, 1, m, :]))
-        for n in 1:N for m in 1:N
+        convert(Vector{Complex{Cdouble}}, ΓnmF[1, n, 1, m, :])
+        for m in 1:N for n in 1:N
     )
 
     return write_cc4s_tensor(
@@ -356,10 +462,10 @@ function write_singular_vectors(
         Dict("length" => NG, "type" => "Momentum"),
     ]
 
-    # row-major write: loop over F then G
+    # U[F, G], the transpose of the stored (NG, NF) matrix
     tensor_data = (
         convert(Complex{Cdouble}, coulomb_vertex_singular_vectors[iG, iF])
-        for iF in 1:NF for iG in 1:NG
+        for iG in 1:NG for iF in 1:NF
     )
 
     return write_cc4s_tensor(

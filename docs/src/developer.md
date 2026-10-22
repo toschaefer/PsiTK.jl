@@ -39,6 +39,7 @@ The verbs transform the two data nouns into each other:
 | [`compress_coulomb_vertex`](@ref) | `DensityFitting` → `DensityFitting` | `src/coulomb_vertex.jl` |
 | [`compute_delta_integrals`](@ref) | orbitals → grid integrals for the interfaces | `src/delta_integrals.jl` |
 | [`dump_cc4s_files`](@ref) | `OrbitalSpace` + `DensityFitting` → files | `src/interfaces/` |
+| [`read_cc4s_tensor`](@ref) | Cc4s files, e.g. a density matrix → `Array` | `src/interfaces/` |
 
 A typical workflow composes the verbs like this:
 
@@ -137,7 +138,8 @@ accumulates the transformations of repeated compressions in the
 **A new interface** is a file in `src/interfaces/` consuming an [`OrbitalSpace`](@ref) and a
 [`DensityFitting`](@ref), so that only that file knows the solver's file format. It checks
 its preconditions (e.g. orthonormal canonical orbitals) itself, see
-[`dump_cc4s_files`](@ref).
+[`dump_cc4s_files`](@ref). Results of the solver are read back as plain arrays in the
+index order of its file format, e.g. by [`read_cc4s_tensor`](@ref).
 
 ## Computational cost
 

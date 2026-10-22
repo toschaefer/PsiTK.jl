@@ -112,4 +112,32 @@
     fitting_cg2 = compress_coulomb_vertex(fitting_cg, CoulombGramian(thresh=1e-2))
     @test size(fitting_cg2.singular_vectors, 1) == NG
     @test reshape(Γmat * fitting_cg2.singular_vectors, size(fitting_cg2.Γ)) ≈ fitting_cg2.Γ
+
+    # The dumped tensors read back as computed; Nvirt ≠ Nocc and NF ≠ NG so that no
+    # index order but the right one passes
+    space_cc4s = select_orbitals(space, 1:(N - 1))
+    occ_cc4s, virt_cc4s = split_occupied_virtual(space_cc4s)
+    @test size(only(virt_cc4s.ψ), 2) != size(only(occ_cc4s.ψ), 2)
+    fitting_cc4s = compress_coulomb_vertex(
+        compute_coulomb_vertex(space_cc4s; interaction_kernel=kernel),
+        CoulombGramian(thresh=1e-3),
+    )
+    folder = mktempdir()
+    dump_cc4s_files(space_cc4s, fitting_cc4s; folder)
+    read_tensor(name) = read_cc4s_tensor(folder, name).tensor
+    energies = read_cc4s_tensor(folder, "EigenEnergies")
+    @test energies.tensor == only(space_cc4s.eigenvalues)
+    @test energies.metaData["fermiEnergy"] ≈ space_cc4s.εF
+    vertex = read_cc4s_tensor(folder, "CoulombVertex")
+    @test [d["type"] for d in vertex.dimensions] == ["AuxiliaryField", "State", "State"]
+    @test vertex.tensor == permutedims(fitting_cc4s.Γ[1, :, 1, :, :], (3, 1, 2))
+    @test read_tensor("CoulombVertexSingularVectors") ==
+          permutedims(fitting_cc4s.singular_vectors)
+    @test read_tensor("CoulombPotential") == fitting_cc4s.kernel_fourier
+    @test read_tensor("GridVectors") ==
+          stack(basis.model.recip_lattice * G for G in fitting_cc4s.G_vectors)
+    @test read_tensor("DeltaIntegralsHH") ==
+          compute_delta_integrals(basis, occ_cc4s.ψ, Val(:HH))
+    @test read_tensor("DeltaIntegralsPPHH") ==
+          compute_delta_integrals(basis, virt_cc4s.ψ, occ_cc4s.ψ, Val(:PPHH))
 end
