@@ -56,17 +56,17 @@ _print_cc4s_element(io, z::Complex) = println(io, '(', real(z), ',', imag(z), ')
     read_cc4s_tensor(folder, name)
 
 Read the tensor `name` in Cc4s format from the files `name.yaml` and `name.elements` in
-`folder`, as written by Cc4s (e.g. `name="rdm.ph"` for the particle-hole block of the
-one-particle reduced density matrix) or by [`dump_cc4s_files`](@ref).
+`folder`, as written by Cc4s or by [`dump_cc4s_files`](@ref). For a set of tensors, e.g.
+the blocks of a density matrix, use [`read_cc4s_tensor_set`](@ref).
 
 The indices of the returned array follow the order of the `dimensions` in the YAML file.
 Cc4s stores the first index fastest, as Julia does, unless the elements are marked as
 `rowMajor`, in which case the array is permuted accordingly.
 
-Throws an `ArgumentError` if a file is missing or uses a format that is not supported
-(a version other than 100, block-sparse tensors, the `halfGrid` format of real Coulomb
-vertices), and a `DimensionMismatch` if the number of elements in the file does not match
-the dimensions.
+Throws an `ArgumentError` if a file is missing, describes a tensor set or uses a format
+that is not supported (a version other than 100, block-sparse tensors, the `halfGrid`
+format of real Coulomb vertices), and a `DimensionMismatch` if the number of elements in
+the file does not match the dimensions.
 
 # Returns
 A `NamedTuple` `(; tensor, dimensions, unit, metaData)` with
@@ -82,12 +82,106 @@ Time and memory are linear in the number of elements, e.g. ``N^2 N_F`` complex n
 for the Coulomb vertex.
 """
 function read_cc4s_tensor(folder::AbstractString, name::AbstractString)
-    yamlfile, elementsfile = _cc4s_files(folder, name)
-    for file in (yamlfile, elementsfile)
-        isfile(file) || throw(ArgumentError("Cc4s tensor file $file not found."))
+    node = _load_cc4s_yaml(folder, name)
+    _is_cc4s_tensor_set(node) &&
+        throw(ArgumentError("$name.yaml describes a Cc4s tensor set. Read it with " *
+                            "`read_cc4s_tensor_set`."))
+    return _read_cc4s_tensor_node(node, joinpath(folder, name), "$name.yaml")
+end
+
+@doc raw"""
+    read_cc4s_tensor_set(folder, name)
+
+Read the set of tensors `name` in Cc4s format from the file `name.yaml` in `folder`, which
+lists the tensors under `components`, and the files `name.components.<key>.elements`
+holding the elements of the component `<key>`. Cc4s writes e.g. the one-particle reduced
+density matrix as the set `rdm` of its blocks `"hh"`, `"hp"`, `"ph"` and `"pp"`, which
+[`merge_hole_particle_blocks`](@ref) assembles into the full matrix.
+
+Throws the exceptions of [`read_cc4s_tensor`](@ref), and an `ArgumentError` if
+`name.yaml` does not describe a tensor set.
+
+# Returns
+A `Dict` from the key of each component to its `NamedTuple`
+`(; tensor, dimensions, unit, metaData)`, see [`read_cc4s_tensor`](@ref).
+
+# Cost
+Time and memory are linear in the number of elements of all components.
+"""
+function read_cc4s_tensor_set(folder::AbstractString, name::AbstractString)
+    node = _load_cc4s_yaml(folder, name)
+    _is_cc4s_tensor_set(node) ||
+        throw(ArgumentError("$name.yaml does not describe a Cc4s tensor set. Read it " *
+                            "with `read_cc4s_tensor`."))
+    path = joinpath(folder, "$name.components")
+    return Dict{String,Any}(
+        string(key) => _read_cc4s_tensor_node(
+            component, "$path.$key", "$name.yaml (component $key)",
+        )
+        for (key, component) in node["components"]
+    )
+end
+
+@doc raw"""
+    merge_hole_particle_blocks(components)
+
+Assemble a tensor over all states from its blocks over holes and particles, e.g. the
+one-particle reduced density matrix ``D_{pq}`` from its blocks `"hh"`, `"hp"`, `"ph"` and
+`"pp"`, as returned by [`read_cc4s_tensor_set`](@ref). The key of a block has one letter
+per index, `h` for the ``N_\text{occ}`` holes and `p` for the ``N_\text{virt}``
+particles. In each index of the result, the holes come first, followed by the particles,
+which is the order of the states written by [`dump_cc4s_files`](@ref).
+
+Throws an `ArgumentError` unless the keys are exactly all ``2^r`` combinations of `h` and
+`p` for a tensor of rank ``r`` (e.g. the Coulomb integrals of Cc4s lack blocks), and a
+`DimensionMismatch` if the sizes of the blocks are inconsistent.
+
+# Returns
+The `Array` of size ``(N_\text{occ} + N_\text{virt})^r``.
+
+# Cost
+Time and memory are linear in the number of elements, ``(N_\text{occ} + N_\text{virt})^r``.
+"""
+function merge_hole_particle_blocks(components::AbstractDict)
+    rank = length(first(keys(components)))
+    blocks = Set(join(letters) for letters in Iterators.product(ntuple(_ -> "hp", rank)...))
+    Set(keys(components)) == blocks ||
+        throw(ArgumentError("The blocks $(sort!(collect(keys(components)))) are not all " *
+                            "combinations of h and p for a tensor of rank $rank."))
+    Nocc = size(components["h"^rank].tensor, 1)
+    Nvirt = size(components["p"^rank].tensor, 1)
+    T = mapreduce(c -> eltype(c.tensor), promote_type, values(components))
+    tensor = zeros(T, ntuple(_ -> Nocc + Nvirt, rank))
+    for (key, component) in components
+        ranges = Tuple(letter == 'h' ? (1:Nocc) : (Nocc + 1:Nocc + Nvirt) for letter in key)
+        size(component.tensor) == length.(ranges) ||
+            throw(DimensionMismatch("The block $key has the size " *
+                                    "$(size(component.tensor)), expected " *
+                                    "$(length.(ranges)) for $Nocc holes and $Nvirt " *
+                                    "particles."))
+        tensor[ranges...] = component.tensor
     end
-    node = YAML.load_file(yamlfile)
-    _check_cc4s_tensor_node(node, yamlfile)
+    return tensor
+end
+
+function _load_cc4s_yaml(folder, name)
+    yamlfile = joinpath(folder, "$name.yaml")
+    isfile(yamlfile) || throw(ArgumentError("Cc4s file $yamlfile not found."))
+    return YAML.load_file(yamlfile)
+end
+
+# Cc4s writes a tensor set with `type: TensorSet`. Without a type, Cc4s reads the map
+# entry by entry, which reaches the same element files.
+function _is_cc4s_tensor_set(node)
+    return haskey(node, "components") && get(node, "type", "TensorSet") == "TensorSet"
+end
+
+# Read the tensor described by `node` from the file `path.elements`; `source` names the
+# YAML node in error messages
+function _read_cc4s_tensor_node(node, path, source)
+    elementsfile = "$path.elements"
+    isfile(elementsfile) || throw(ArgumentError("Cc4s file $elementsfile not found."))
+    _check_cc4s_tensor_node(node, source)
 
     T = node["scalarType"] == "Real64" ? Float64 : ComplexF64
     dimensions = _cc4s_list(node["dimensions"])
@@ -106,26 +200,26 @@ function read_cc4s_tensor(folder::AbstractString, name::AbstractString)
     return (; tensor, dimensions, unit=Float64(node["unit"]), metaData)
 end
 
-# All format requirements of `read_cc4s_tensor`, which the element readers only assert
-function _check_cc4s_tensor_node(node, yamlfile)
+# All format requirements of a tensor, which the element readers only assert
+function _check_cc4s_tensor_node(node, source)
     get(node, "type", nothing) == "Tensor" ||
-        throw(ArgumentError("$yamlfile does not describe a Cc4s tensor."))
+        throw(ArgumentError("$source does not describe a Cc4s tensor."))
     get(node, "version", nothing) == 100 ||
-        throw(ArgumentError("$yamlfile has the Cc4s format version " *
+        throw(ArgumentError("$source has the Cc4s format version " *
                             "$(get(node, "version", nothing)), only 100 is supported."))
     node["scalarType"] in ("Real64", "Complex64") ||
-        throw(ArgumentError("$yamlfile has the scalar type $(node["scalarType"]), only " *
+        throw(ArgumentError("$source has the scalar type $(node["scalarType"]), only " *
                             "Real64 and Complex64 are supported."))
     node["elements"]["type"] in ("TextFile", "IeeeBinaryFile") ||
-        throw(ArgumentError("$yamlfile has elements of type " *
+        throw(ArgumentError("$source has elements of type " *
                             "$(node["elements"]["type"]), only TextFile and " *
                             "IeeeBinaryFile are supported."))
     haskey(node, "nonZeroCondition") &&
-        throw(ArgumentError("$yamlfile describes a block-sparse tensor, which is not " *
+        throw(ArgumentError("$source describes a block-sparse tensor, which is not " *
                             "supported. Write it densely from Cc4s."))
     metaData = something(get(node, "metaData", nothing), Dict())
     get(metaData, "halfGrid", 0) == 1 &&
-        throw(ArgumentError("$yamlfile uses the halfGrid format of real Coulomb " *
+        throw(ArgumentError("$source uses the halfGrid format of real Coulomb " *
                             "vertices, which is not supported."))
     return nothing
 end

@@ -60,4 +60,46 @@
     write_cc4s_tensor(folder, "half", rand(ComplexF64, 4); dimensions=dims(4),
                       scalarType="Complex64", metaData=Dict("halfGrid" => 1))
     @test_throws ArgumentError read_cc4s_tensor(folder, "half")
+
+    # Tensor sets as written by Cc4s, e.g. the density matrix as its hole/particle blocks
+    # in rdm.components.<key>.elements, with or without the type TensorSet in rdm.yaml
+    Nocc, Nvirt = 2, 3
+    D = rand(ComplexF64, Nocc + Nvirt, Nocc + Nvirt)
+    states = Dict('h' => 1:Nocc, 'p' => (Nocc + 1):(Nocc + Nvirt))
+    function write_cc4s_set(name, type)
+        components = Dict{String,Any}()
+        for key in ("hh", "hp", "ph", "pp")
+            block = D[states[key[1]], states[key[2]]]
+            write(joinpath(folder, "$name.components.$key.elements"), vec(block))
+            components[key] = Dict(
+                "dimensions" => Dict(0 => Dict("length" => size(block, 1)),
+                                     1 => Dict("length" => size(block, 2))),
+                "elements" => Dict("type" => "IeeeBinaryFile"),
+                "scalarType" => "Complex64",
+                "type" => "Tensor",
+                "unit" => 3.388234215746401e-316,
+                "version" => 100,
+            )
+        end
+        node = Dict{String,Any}("components" => components)
+        isnothing(type) || (node["type"] = type)
+        open(io -> PsiTK.YAML.write(io, node), joinpath(folder, "$name.yaml"), "w")
+    end
+    for (name, type) in (("rdm", nothing), ("rdm_typed", "TensorSet"))
+        write_cc4s_set(name, type)
+        set = read_cc4s_tensor_set(folder, name)
+        @test sort!(collect(keys(set))) == ["hh", "hp", "ph", "pp"]
+        @test set["hp"].tensor == D[1:Nocc, (Nocc + 1):end]
+        @test merge_hole_particle_blocks(set) == D
+    end
+
+    # Tensors and tensor sets are not mixed up, and blocks must be complete and consistent
+    @test_throws ArgumentError read_cc4s_tensor(folder, "rdm")
+    @test_throws ArgumentError read_cc4s_tensor_set(folder, "A")
+    blocks = read_cc4s_tensor_set(folder, "rdm")
+    @test_throws DimensionMismatch merge_hole_particle_blocks(
+        merge(blocks, Dict("hp" => (; tensor=zeros(Nocc, Nocc)))),
+    )
+    delete!(blocks, "ph")
+    @test_throws ArgumentError merge_hole_particle_blocks(blocks)
 end
