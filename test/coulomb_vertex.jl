@@ -62,7 +62,7 @@
     ρ_bk, G_bk = compute_overlap_densities(basis, space.ψ, ψ_copy; Ecut_ratio=2/3)
     @test G_bk == G_vectors && ρ_bk ≈ ρmnG
     occ_space, _ = split_occupied_virtual(space)
-    Nocc = size(occ_space.ψ[1], 2)
+    Nocc = n_orbitals(occ_space)
     ρ_ov, _ = compute_overlap_densities(occ_space, space; Ecut_ratio=2/3)
     @test size(ρ_ov)[1:4] == (Nk, Nocc, Nk, N)
     @test ρ_ov ≈ ρmnG[:, 1:Nocc, :, :, :]
@@ -117,7 +117,7 @@
     # index order but the right one passes
     space_cc4s = select_orbitals(space, 1:(N - 1))
     occ_cc4s, virt_cc4s = split_occupied_virtual(space_cc4s)
-    @test size(only(virt_cc4s.ψ), 2) != size(only(occ_cc4s.ψ), 2)
+    @test n_orbitals(virt_cc4s) != n_orbitals(occ_cc4s)
     fitting_cc4s = compress_coulomb_vertex(
         compute_coulomb_vertex(space_cc4s; interaction_kernel=kernel),
         CoulombGramian(thresh=1e-3),

@@ -9,7 +9,7 @@
     kernel = only(t.kernel for t in basis.model.term_types if t isa ExactExchange)
     occ_space, _ = split_occupied_virtual(OrbitalSpace(scfres))
     Npw = length(basis.kpoints[1].G_vectors)
-    Nocc = size(occ_space.ψ[1], 2)
+    Nocc = n_orbitals(occ_space)
     Nvirt = 12
 
     # ---------------------------------------------------------
@@ -207,7 +207,7 @@ end
     occ_space, _ = split_occupied_virtual(OrbitalSpace(scfres))
     target = DensitySpecificVirtuals(n_orbitals=6, interaction_kernel=ProbeCharge())
     dsv = generate_orbitals(target, occ_space, scfres.ham; solver=FullDiagonalization())
-    @test size(dsv.ψ[1], 2) == 6
+    @test n_orbitals(dsv) == 6
     @test norm(occ_space.ψ[1]' * dsv.ψ[1]) < 1e-6
     @test all(dsv.eigenvalues[1] .< 0)
 

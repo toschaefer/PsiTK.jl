@@ -33,6 +33,7 @@ The verbs transform the two data nouns into each other:
 | verb | transforms | lives in |
 |---|---|---|
 | [`OrbitalSpace`](@ref)`(scfres)` | DFTK SCF result → `OrbitalSpace` | `src/orbital_spaces.jl` |
+| [`n_orbitals`](@ref) | `OrbitalSpace` → number of orbitals per k-point | `src/orbital_spaces.jl` |
 | [`split_occupied_virtual`](@ref), [`select_orbitals`](@ref), [`merge_spaces`](@ref), [`canonicalize_orbitals`](@ref) | `OrbitalSpace` → `OrbitalSpace` | `src/orbital_spaces.jl` |
 | [`generate_orbitals`](@ref) | `OrbitalSpace` (occupied) → `OrbitalSpace` (virtual) | `src/virtual_orbitals.jl` |
 | [`compute_overlap_densities`](@ref), [`compute_coulomb_vertex`](@ref) | `OrbitalSpace` → `DensityFitting` | `src/coulomb_vertex.jl` |

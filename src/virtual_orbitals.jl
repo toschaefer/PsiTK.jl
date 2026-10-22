@@ -170,7 +170,7 @@ function _eigenproblems(target::MaximalExchangeVirtuals, occ_space, active, ham)
     end
 end
 
-function _n_orbitals(target::VirtualOrbitalTarget, Npw, Nocc)
+function _n_target_orbitals(target::VirtualOrbitalTarget, Npw, Nocc)
     target.n_orbitals === :all && return Npw - Nocc
     return target.n_orbitals
 end
@@ -275,26 +275,27 @@ function generate_orbitals(
     for (ik, kpt) in enumerate(basis.kpoints)
         ψocck = occ_space.ψ[ik]
         Npw = length(kpt.G_vectors)
-        n_orbitals = _n_orbitals(target, Npw, size(ψocck, 2))
+        Nocc = n_orbitals(occ_space, ik)
+        Nvirt = _n_target_orbitals(target, Npw, Nocc)
 
-        if solver isa LOBPCG && n_orbitals > 0.1 * Npw
-            @warn "n_orbitals ($n_orbitals) is > 10% of plane waves ($Npw). " *
+        if solver isa LOBPCG && Nvirt > 0.1 * Npw
+            @warn "n_orbitals ($Nvirt) is > 10% of plane waves ($Npw). " *
                   "FullDiagonalization() might be faster."
         end
 
         # Stochastic initial guess in the orthogonal complement of the occupied space
-        n_guess = min(_n_guess(solver, n_orbitals), Npw - size(ψocck, 2))
+        n_guess = min(_n_guess(solver, Nvirt), Npw - Nocc)
         X0 = construct_stochastic_orbitals(n_guess, kpt, T)
         X0 .-= ψocck * (ψocck' * X0)
         X0 = Matrix(qr(X0).Q)
 
         preconditioner = DFTK.PreconditionerTPA(basis, kpt)
         (; A, B, ε_offset) = problems[ik]
-        (; λ, X) = _solve(A, B, X0, n_orbitals, preconditioner, solver)
+        (; λ, X) = _solve(A, B, X0, Nvirt, preconditioner, solver)
 
         push!(ψ_virt, X)
         push!(eigenvalues_virt, λ .+ ε_offset)
-        push!(occupation_virt, zeros(R, n_orbitals))
+        push!(occupation_virt, zeros(R, Nvirt))
     end
 
     return OrbitalSpace{TB,T,R}(

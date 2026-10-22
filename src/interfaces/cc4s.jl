@@ -444,7 +444,7 @@ function _check_cc4s_input(active_space, fitting, folder, force)
             throw(ArgumentError("Cc4s interface requires integer occupations, found " *
                                 "$occ. Use a gapped reference without smearing."))
     end
-    N = size(only(active_space.ψ), 2)
+    N = n_orbitals(active_space)
     size(fitting.Γ)[1:4] == (1, N, 1, N) ||
         throw(DimensionMismatch("The Coulomb vertex of size $(size(fitting.Γ)[1:4]) " *
                                 "does not match the active space of $N orbitals. " *

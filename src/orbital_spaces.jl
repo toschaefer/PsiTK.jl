@@ -41,6 +41,25 @@ function OrbitalSpace(scfres)
 end
 
 """
+    n_orbitals(space::OrbitalSpace, ik)
+    n_orbitals(space::OrbitalSpace)
+
+The number of orbitals of `space` at k-point `ik`. Without `ik`, the number of orbitals
+per k-point, which must then be the same at all k-points: it can differ between them,
+e.g. after [`split_occupied_virtual`](@ref) of a metal or [`select_orbitals`](@ref) with
+one index list per k-point, and an `ArgumentError` is thrown then.
+"""
+n_orbitals(space::OrbitalSpace, ik) = size(space.ψ[ik], 2)
+
+function n_orbitals(space::OrbitalSpace)
+    N = n_orbitals(space, firstindex(space.ψ))
+    all(ψk -> size(ψk, 2) == N, space.ψ) ||
+        throw(ArgumentError("The number of orbitals differs between k-points: " *
+                            "$(size.(space.ψ, 2)). Use `n_orbitals(space, ik)`."))
+    return N
+end
+
+"""
     merge_spaces(spaces::OrbitalSpace...)
 
 Merges multiple `OrbitalSpace`s into a single `OrbitalSpace`.
