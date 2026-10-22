@@ -66,18 +66,22 @@
     Nocc, Nvirt = 2, 3
     D = rand(ComplexF64, Nocc + Nvirt, Nocc + Nvirt)
     states = Dict('h' => 1:Nocc, 'p' => (Nocc + 1):(Nocc + Nvirt))
+    types = Dict('h' => "Hole", 'p' => "Particle")
     function write_cc4s_set(name, type)
         components = Dict{String,Any}()
         for key in ("hh", "hp", "ph", "pp")
             block = D[states[key[1]], states[key[2]]]
             write(joinpath(folder, "$name.components.$key.elements"), vec(block))
+            dimensions = Dict(d - 1 => Dict("length" => size(block, d),
+                                            "type" => types[key[d]]) for d in 1:2)
             components[key] = Dict(
-                "dimensions" => Dict(0 => Dict("length" => size(block, 1)),
-                                     1 => Dict("length" => size(block, 2))),
+                "dimensions" => dimensions,
                 "elements" => Dict("type" => "IeeeBinaryFile"),
                 "scalarType" => "Complex64",
                 "type" => "Tensor",
-                "unit" => 3.388234215746401e-316,
+                # Cc4s writes uninitialized units for these blocks
+                "unit" => key == "hp" ? 3.2788362241816489e-316 : 3.388234215746401e-316,
+                "metaData" => Dict("shared" => 1, "only_$key" => 2),
                 "version" => 100,
             )
         end
@@ -90,16 +94,29 @@
         set = read_cc4s_tensor_set(folder, name)
         @test sort!(collect(keys(set))) == ["hh", "hp", "ph", "pp"]
         @test set["hp"].tensor == D[1:Nocc, (Nocc + 1):end]
-        @test merge_hole_particle_blocks(set) == D
+        merged = merge_cc4s_tensor_set(set, "hp")
+        @test merged.tensor == D
+        @test merged.dimensions == fill(Dict("length" => Nocc + Nvirt), 2)
+        @test isnan(merged.unit) && merged.metaData == Dict("shared" => 1)
+        p_first = [states['p']; states['h']]
+        @test merge_cc4s_tensor_set(set, "ph").tensor == D[p_first, p_first]
     end
+
+    # Merging keeps the dimension types and the unit on which all components agree
+    pp = read_cc4s_tensor_set(folder, "rdm")["pp"]
+    merged = merge_cc4s_tensor_set(Dict("pp" => pp), "p")
+    @test merged.tensor == pp.tensor && merged.unit == pp.unit
+    @test [d["type"] for d in merged.dimensions] == ["Particle", "Particle"]
 
     # Tensors and tensor sets are not mixed up, and blocks must be complete and consistent
     @test_throws ArgumentError read_cc4s_tensor(folder, "rdm")
     @test_throws ArgumentError read_cc4s_tensor_set(folder, "A")
     blocks = read_cc4s_tensor_set(folder, "rdm")
-    @test_throws DimensionMismatch merge_hole_particle_blocks(
-        merge(blocks, Dict("hp" => (; tensor=zeros(Nocc, Nocc)))),
+    @test_throws ArgumentError merge_cc4s_tensor_set(blocks, "hpx")
+    @test_throws ArgumentError merge_cc4s_tensor_set(blocks, "hph")
+    @test_throws DimensionMismatch merge_cc4s_tensor_set(
+        merge(blocks, Dict("hp" => (; tensor=zeros(Nocc, Nocc)))), "hp",
     )
     delete!(blocks, "ph")
-    @test_throws ArgumentError merge_hole_particle_blocks(blocks)
+    @test_throws ArgumentError merge_cc4s_tensor_set(blocks, "hp")
 end

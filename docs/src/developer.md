@@ -40,7 +40,7 @@ The verbs transform the two data nouns into each other:
 | [`compute_delta_integrals`](@ref) | orbitals → grid integrals for the interfaces | `src/delta_integrals.jl` |
 | [`dump_cc4s_files`](@ref) | `OrbitalSpace` + `DensityFitting` → files | `src/interfaces/` |
 | [`read_cc4s_tensor`](@ref), [`read_cc4s_tensor_set`](@ref) | Cc4s files → `Array`s | `src/interfaces/` |
-| [`merge_hole_particle_blocks`](@ref) | hole/particle blocks, e.g. of a density matrix → `Array` | `src/interfaces/` |
+| [`merge_cc4s_tensor_set`](@ref) | Cc4s tensor set, e.g. the blocks of a density matrix → one tensor | `src/interfaces/` |
 
 A typical workflow composes the verbs like this:
 

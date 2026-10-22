@@ -31,7 +31,7 @@ include("coulomb_vertex.jl")
 export compute_delta_integrals
 include("delta_integrals.jl")
 
-export dump_cc4s_files, read_cc4s_tensor, read_cc4s_tensor_set, merge_hole_particle_blocks
+export dump_cc4s_files, read_cc4s_tensor, read_cc4s_tensor_set, merge_cc4s_tensor_set
 include("interfaces/cc4s.jl")
 
 end

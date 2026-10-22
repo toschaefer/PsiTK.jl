@@ -96,7 +96,7 @@ Read the set of tensors `name` in Cc4s format from the file `name.yaml` in `fold
 lists the tensors under `components`, and the files `name.components.<key>.elements`
 holding the elements of the component `<key>`. Cc4s writes e.g. the one-particle reduced
 density matrix as the set `rdm` of its blocks `"hh"`, `"hp"`, `"ph"` and `"pp"`, which
-[`merge_hole_particle_blocks`](@ref) assembles into the full matrix.
+[`merge_cc4s_tensor_set`](@ref) merges into one matrix.
 
 Throws the exceptions of [`read_cc4s_tensor`](@ref), and an `ArgumentError` if
 `name.yaml` does not describe a tensor set.
@@ -123,45 +123,63 @@ function read_cc4s_tensor_set(folder::AbstractString, name::AbstractString)
 end
 
 @doc raw"""
-    merge_hole_particle_blocks(components)
+    merge_cc4s_tensor_set(set, order)
 
-Assemble a tensor over all states from its blocks over holes and particles, e.g. the
-one-particle reduced density matrix ``D_{pq}`` from its blocks `"hh"`, `"hp"`, `"ph"` and
-`"pp"`, as returned by [`read_cc4s_tensor_set`](@ref). The key of a block has one letter
-per index, `h` for the ``N_\text{occ}`` holes and `p` for the ``N_\text{virt}``
-particles. In each index of the result, the holes come first, followed by the particles,
-which is the order of the states written by [`dump_cc4s_files`](@ref).
+Merge the components of a tensor `set`, as returned by [`read_cc4s_tensor_set`](@ref),
+into one tensor. The key of each component has one letter per index, and each letter
+labels a range of that index; `order` lists the letters in the order of their ranges. E.g.
+Cc4s writes the one-particle reduced density matrix as the components `"hh"`, `"hp"`,
+`"ph"` and `"pp"` over holes `h` and particles `p`, and `order="hp"` merges them into the
+matrix over all states with the holes first, the order of [`dump_cc4s_files`](@ref).
 
-Throws an `ArgumentError` unless the keys are exactly all ``2^r`` combinations of `h` and
-`p` for a tensor of rank ``r`` (e.g. the Coulomb integrals of Cc4s lack blocks), and a
-`DimensionMismatch` if the sizes of the blocks are inconsistent.
+Throws an `ArgumentError` unless the keys are exactly all combinations of the letters in
+`order` (e.g. the Coulomb integrals of Cc4s lack blocks related by symmetry), and a
+`DimensionMismatch` if the sizes of the components are inconsistent.
 
 # Returns
-The `Array` of size ``(N_\text{occ} + N_\text{virt})^r``.
+A `NamedTuple` `(; tensor, dimensions, unit, metaData)` as from
+[`read_cc4s_tensor`](@ref). Of the dimension types, the `unit` and the `metaData`, it keeps
+what all components agree on; the `unit` is `NaN` if they disagree.
 
 # Cost
-Time and memory are linear in the number of elements, ``(N_\text{occ} + N_\text{virt})^r``.
+Time and memory are linear in the number of elements of all components.
 """
-function merge_hole_particle_blocks(components::AbstractDict)
-    rank = length(first(keys(components)))
-    blocks = Set(join(letters) for letters in Iterators.product(ntuple(_ -> "hp", rank)...))
-    Set(keys(components)) == blocks ||
-        throw(ArgumentError("The blocks $(sort!(collect(keys(components)))) are not all " *
-                            "combinations of h and p for a tensor of rank $rank."))
-    Nocc = size(components["h"^rank].tensor, 1)
-    Nvirt = size(components["p"^rank].tensor, 1)
-    T = mapreduce(c -> eltype(c.tensor), promote_type, values(components))
-    tensor = zeros(T, ntuple(_ -> Nocc + Nvirt, rank))
-    for (key, component) in components
-        ranges = Tuple(letter == 'h' ? (1:Nocc) : (Nocc + 1:Nocc + Nvirt) for letter in key)
-        size(component.tensor) == length.(ranges) ||
-            throw(DimensionMismatch("The block $key has the size " *
+function merge_cc4s_tensor_set(set::AbstractDict, order::AbstractString)
+    letters = collect(order)
+    rank = length(first(keys(set)))
+    keys_expected = Set(join(t) for t in Iterators.product(ntuple(_ -> letters, rank)...))
+    allunique(letters) && Set(keys(set)) == keys_expected ||
+        throw(ArgumentError("The components $(sort!(collect(keys(set)))) are not all " *
+                            "combinations of the letters \"$order\" for a tensor of " *
+                            "rank $rank."))
+    lens = [size(set[c^rank].tensor, 1) for c in letters]
+    ranges = Dict(zip(letters, range.(cumsum(lens) .- lens .+ 1, cumsum(lens))))
+    T = mapreduce(c -> eltype(c.tensor), promote_type, values(set))
+    tensor = Array{T}(undef, ntuple(_ -> sum(lens), rank))  # every component fills a block
+    for (key, component) in set
+        block = Tuple(ranges[c] for c in key)
+        size(component.tensor) == length.(block) ||
+            throw(DimensionMismatch("The component $key has the size " *
                                     "$(size(component.tensor)), expected " *
-                                    "$(length.(ranges)) for $Nocc holes and $Nvirt " *
-                                    "particles."))
-        tensor[ranges...] = component.tensor
+                                    "$(length.(block)) from the component of each " *
+                                    "letter alone."))
+        tensor[block...] = component.tensor
     end
-    return tensor
+
+    components = collect(values(set))
+    dimensions = map(1:rank) do d
+        dimension = Dict{String,Any}("length" => size(tensor, d))
+        types = [get(c.dimensions[d], "type", nothing) for c in components]
+        allequal(types) && !isnothing(first(types)) && (dimension["type"] = first(types))
+        return dimension
+    end
+    units = [c.unit for c in components]
+    unit = allequal(units) ? first(units) : NaN
+    metaData = Dict{String,Any}(
+        key => value for (key, value) in first(components).metaData
+        if all(c -> get(c.metaData, key, nothing) == value, components)
+    )
+    return (; tensor, dimensions, unit, metaData)
 end
 
 function _load_cc4s_yaml(folder, name)
