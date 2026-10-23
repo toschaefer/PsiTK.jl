@@ -13,7 +13,7 @@ include("callbacks.jl")
 
 include("operators.jl")
 
-export OrbitalSpace, n_orbitals
+export OrbitalSpace, n_orbitals, save_orbitals, load_orbitals
 export merge_spaces, canonicalize_orbitals, split_occupied_virtual, select_orbitals
 include("orbital_spaces.jl")
 

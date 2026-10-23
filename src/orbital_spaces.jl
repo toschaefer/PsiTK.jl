@@ -272,3 +272,75 @@ function select_orbitals(space::OrbitalSpace, indices::AbstractVector{Int})
     # Apply the same indices to all k-points
     return select_orbitals(space, [indices for _ in eachindex(space.ψ)])
 end
+
+"""
+    save_orbitals(filename, space::OrbitalSpace)
+
+Saves `space` to `filename`, to be read back by [`load_orbitals`](@ref). The format is
+given by the file extension; only `.jld2` is supported and requires `using JLD2`.
+
+The file holds the orbital coefficients `ψ`, `eigenvalues`, `occupation`, `εF` and
+`is_orthonormal`, but not the basis. Instead, it stores a fingerprint of the basis
+(`Ecut`, `fft_size`, the k-points and the number of plane waves per k-point), which
+[`load_orbitals`](@ref) checks against the basis it is given. The file is first written to
+`filename * ".new"` and then moved into place, so an interrupted run leaves no truncated
+`filename`.
+
+Saving the orbitals, rather than recomputing them, keeps them exactly: e.g. iterative
+eigensolvers start from random vectors and return degenerate orbitals rotated differently
+in each run.
+
+Only serial runs are supported: an `ArgumentError` is thrown if the k-points of the basis
+are distributed over several MPI processes. The file format may change between PsiTK
+versions.
+"""
+function save_orbitals(filename::AbstractString, space::OrbitalSpace)
+    _check_serial(space.basis)
+    return save_orbitals(Val(_file_format(filename)), filename, space)
+end
+
+function save_orbitals(::Val, ::AbstractString, ::OrbitalSpace)
+    throw(ArgumentError("Saving and loading .jld2 files requires `using JLD2`."))
+end
+
+"""
+    load_orbitals(filename, basis)
+
+Loads an [`OrbitalSpace`](@ref) on `basis` from `filename`, written by
+[`save_orbitals`](@ref). The format is given by the file extension; only `.jld2` is
+supported and requires `using JLD2`.
+
+The basis is not stored in the file: `basis` must be equivalent to the one the orbitals
+were saved with, e.g. rebuilt from the same model, `Ecut` and k-point grid. An
+`ArgumentError` naming the mismatching quantity is thrown if `Ecut`, `fft_size`, the
+k-points or the number of plane waves per k-point differ from those in the file. Other
+properties of the basis, e.g. the model, are not checked.
+
+Only serial runs are supported: an `ArgumentError` is thrown if the k-points of `basis`
+are distributed over several MPI processes.
+"""
+function load_orbitals(filename::AbstractString, basis::PlaneWaveBasis)
+    _check_serial(basis)
+    return load_orbitals(Val(_file_format(filename)), filename, basis)
+end
+
+function load_orbitals(::Val, ::AbstractString, ::PlaneWaveBasis)
+    throw(ArgumentError("Saving and loading .jld2 files requires `using JLD2`."))
+end
+
+function _check_serial(basis)
+    n_procs = DFTK.mpi_nprocs(basis.comm_kpts)
+    n_procs == 1 ||
+        throw(ArgumentError("Saving and loading orbitals is only supported in serial " *
+                            "runs, but the k-points are distributed over $n_procs MPI " *
+                            "processes."))
+    return nothing
+end
+
+function _file_format(filename)
+    format = Symbol(lstrip(last(splitext(filename)), '.'))
+    format == :jld2 ||
+        throw(ArgumentError("File format \"$format\" of $filename is not supported. " *
+                            "Use a filename ending in \".jld2\"."))
+    return format
+end
